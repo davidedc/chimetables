@@ -1,23 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/AppTheme">
 
+        <!-- The kiosk: HOME + LAUNCHER, enters lock task automatically once whitelisted,
+             and may show over the keyguard / turn the screen on when an alarm brings it forward. -->
         <activity
             android:name=".KioskActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|uiMode"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:lockTaskMode="if_whitelisted">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ParentActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:showWhenLocked="true"
+            android:windowSoftInputMode="adjustResize" />
 
         <receiver
             android:name=".AdminReceiver"
@@ -29,6 +46,40 @@
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
                 <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".WakeReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".SystemEventsReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- adb-only maintenance commands: shell holds DUMP, normal apps cannot. -->
+        <receiver
+            android:name=".CommandReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="app.timestables.cmd.STATUS" />
+                <action android:name="app.timestables.cmd.PROVISION" />
+                <action android:name="app.timestables.cmd.HARDEN" />
+                <action android:name="app.timestables.cmd.UNHARDEN" />
+                <action android:name="app.timestables.cmd.SET_PIN" />
+                <action android:name="app.timestables.cmd.TEST_WAKE" />
+                <action android:name="app.timestables.cmd.SCHEDULE" />
+                <action android:name="app.timestables.cmd.BEEP" />
+                <action android:name="app.timestables.cmd.RESET_PROGRESS" />
             </intent-filter>
         </receiver>
     </application>
