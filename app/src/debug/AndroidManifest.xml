@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds are testOnly: install needs `adb install -t`, and as device owner they can be
+     removed with `adb shell dpm remove-active-admin app.timestables/.AdminReceiver`. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:testOnly="true"
+        tools:replace="android:testOnly" />
+</manifest>

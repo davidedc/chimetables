@@ -1,0 +1,66 @@
+plugins {
+    id 'com.android.application'
+}
+
+// One local keystore signs both debug and release, so either variant can be
+// installed over the other on the device without uninstalling (a device-owner
+// app cannot be uninstalled). keystore/ is git-ignored; scripts/build.sh creates it.
+def keystorePropsFile = rootProject.file('keystore/keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+android {
+    namespace = 'app.timestables'
+    compileSdk = 29
+
+    defaultConfig {
+        applicationId = 'app.timestables'
+        minSdk = 29
+        targetSdk = 29
+        versionCode = 1
+        versionName = '0.1'
+    }
+
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            local {
+                storeFile = rootProject.file(keystoreProps['storeFile'])
+                storePassword = keystoreProps['storePassword']
+                keyAlias = keystoreProps['keyAlias']
+                keyPassword = keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (keystorePropsFile.exists()) signingConfig = signingConfigs.local
+        }
+        release {
+            minifyEnabled = false
+            if (keystorePropsFile.exists()) signingConfig = signingConfigs.local
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        // targetSdk 29 is deliberate (the device runs Android 10); this app is never published.
+        disable += ['ExpiredTargetSdkVersion', 'OldTargetApi']
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}

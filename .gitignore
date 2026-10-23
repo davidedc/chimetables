@@ -1,0 +1,28 @@
+# Build outputs
+build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local machine config
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Secrets: signing keys and anything PIN-related never go in git
+keystore/
+*.jks
+*.keystore
+keystore.properties
+*.pin
+pin.txt
+
+# Pulled device logs
+logs/
