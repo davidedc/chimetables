@@ -54,6 +54,7 @@ public class KioskActivity extends Activity {
     private TextView bigText;
     private TextView subText;
     private Button primary;
+    private SlideToStart slider;
     private LinearLayout ratings;
     private TextView footer;
 
@@ -291,11 +292,18 @@ public class KioskActivity extends Activity {
         content.addView(primary, lp);
         primary.setOnClickListener(v -> {
             if (!tapAllowed()) return;
-            if (mode == Mode.CALLING) startSession();
-            else if (mode == Mode.QUESTION) reveal();
-            else if (mode == Mode.SLEEPING) startSession();
+            if (mode == Mode.QUESTION) reveal();
             else if (mode == Mode.DONE) goToSleep();
         });
+
+        // Starting a session needs a deliberate slide, so pocket touches can't start one.
+        slider = new SlideToStart(this);
+        slider.setListener(() -> {
+            if (mode == Mode.CALLING || mode == Mode.SLEEPING) startSession();
+        });
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 88));
+        sp.topMargin = Ui.dp(this, 8);
+        content.addView(slider, sp);
 
         ratings = new LinearLayout(this);
         ratings.setOrientation(LinearLayout.HORIZONTAL);
@@ -345,6 +353,8 @@ public class KioskActivity extends Activity {
         bigText.setTextColor(night ? Ui.NIGHT_INK : Ui.INK);
         subText.setTextColor(night ? Ui.NIGHT_INK : Ui.INK);
         primary.setVisibility(View.VISIBLE);
+        slider.setVisibility(View.GONE);
+        slider.reset();
         ratings.setVisibility(View.GONE);
         footer.setText("");
 
@@ -356,8 +366,9 @@ public class KioskActivity extends Activity {
                 subText.setText(next > 0 ? "Zzz… see you at " + Alarms.formatTime(next) : "Zzz…");
                 Settings s = store.settings();
                 boolean due = !Session.nothingToDo(store.deck(), store.srs(), store.activeCards(), s.newPerDay, now);
-                primary.setVisibility(due ? View.VISIBLE : View.GONE);
-                primary.setText("Play now ▶");
+                primary.setVisibility(View.GONE);
+                slider.setVisibility(due ? View.VISIBLE : View.GONE);
+                slider.setLabel("Slide to play");
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
                 }
@@ -367,7 +378,9 @@ public class KioskActivity extends Activity {
                 topLine.setText("🔔 🔔 🔔");
                 bigText.setText("Times\ntables!");
                 subText.setText("👋");
-                primary.setText("Let's go! ▶");
+                primary.setVisibility(View.GONE);
+                slider.setVisibility(View.VISIBLE);
+                slider.setLabel("Slide to start");
                 break;
             case QUESTION:
             case ANSWER: {
@@ -419,11 +432,7 @@ public class KioskActivity extends Activity {
                 }
                 return true; // corner taps never reach the cards
             }
-            if (mode == Mode.CALLING) {
-                startSession(); // any touch answers the call
-                return true;
-            }
-            if (mode != Mode.SLEEPING) holdScreen(SESSION_IDLE_MS);
+            if (mode != Mode.SLEEPING && mode != Mode.CALLING) holdScreen(SESSION_IDLE_MS);
         }
         return super.dispatchTouchEvent(ev);
     }

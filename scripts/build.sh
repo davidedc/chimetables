@@ -31,7 +31,8 @@ EOF
     chmod 600 keystore/keystore.properties keystore/release.jks
 fi
 
-./gradlew --quiet "test${Variant}UnitTest" "assemble${Variant}"
+# Unit tests (JVM) exist for the debug build type only.
+./gradlew --quiet :app:testDebugUnitTest ":app:assemble${Variant}"
 apk="app/build/outputs/apk/$variant/app-$variant.apk"
 [ -f "$apk" ] || die "build finished but $apk is missing"
 echo "Built $apk"

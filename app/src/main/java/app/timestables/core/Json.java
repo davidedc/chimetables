@@ -91,8 +91,12 @@ public final class Json {
     }
 
     public static Settings settingsFromJson(String text) throws JSONException {
+        return settingsFromJson(text, new Settings());
+    }
+
+    /** Applies the fields present in {@code text} on top of {@code s} (which is modified and returned). */
+    public static Settings settingsFromJson(String text, Settings s) throws JSONException {
         JSONObject o = new JSONObject(text);
-        Settings s = new Settings();
         JSONArray tables = o.optJSONArray("tables");
         if (tables != null) {
             s.tables = new TreeSet<>();

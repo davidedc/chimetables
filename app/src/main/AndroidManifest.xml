@@ -74,9 +74,11 @@
                 <action android:name="app.timestables.cmd.STATUS" />
                 <action android:name="app.timestables.cmd.PROVISION" />
                 <action android:name="app.timestables.cmd.HARDEN" />
+                <action android:name="app.timestables.cmd.ALLOW_INSTALLS" />
                 <action android:name="app.timestables.cmd.UNHARDEN" />
                 <action android:name="app.timestables.cmd.SET_PIN" />
                 <action android:name="app.timestables.cmd.TEST_WAKE" />
+                <action android:name="app.timestables.cmd.SETTINGS" />
                 <action android:name="app.timestables.cmd.SET_TIME" />
                 <action android:name="app.timestables.cmd.RESTRICT" />
                 <action android:name="app.timestables.cmd.SCHEDULE" />

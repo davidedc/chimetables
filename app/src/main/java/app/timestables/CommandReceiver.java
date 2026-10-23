@@ -9,6 +9,7 @@ import android.os.BatteryManager;
 import android.os.PowerManager;
 
 import app.timestables.core.Deck;
+import app.timestables.core.Json;
 import app.timestables.core.PinHasher;
 import app.timestables.core.Settings;
 
@@ -23,9 +24,10 @@ import java.util.List;
  * <pre>
  * am broadcast -n app.timestables/.CommandReceiver -a app.timestables.cmd.STATUS
  *   PROVISION [--es hide pkg1,pkg2] [--es tz Europe/London]
- *   HARDEN | UNHARDEN [--ez remove_owner true]
+ *   HARDEN | ALLOW_INSTALLS | UNHARDEN [--ez remove_owner true]
  *   SET_PIN --es pin 1234
  *   TEST_WAKE --ei seconds 60 [--es method alarmclock|exact]
+ *   SETTINGS [--es json '{"tables":[2,3],"wakeTimes":["07:45"]}']   show, or merge and apply
  *   SET_TIME --el millis <epoch ms>        (auto time is switched off)
  *   RESTRICT --es add|clear no_safe_boot
  *   SCHEDULE | BEEP | RESET_PROGRESS
@@ -63,6 +65,8 @@ public class CommandReceiver extends BroadcastReceiver {
             }
             case "HARDEN":
                 return Kiosk.harden(context);
+            case "ALLOW_INSTALLS":
+                return Kiosk.allowInstalls(context);
             case "UNHARDEN":
                 return Kiosk.unharden(context, intent.getBooleanExtra("remove_owner", false));
             case "SET_PIN": {
@@ -75,6 +79,21 @@ public class CommandReceiver extends BroadcastReceiver {
                 int seconds = intent.getIntExtra("seconds", 60);
                 boolean alarmClock = !"exact".equals(intent.getStringExtra("method"));
                 return "test wake at " + Alarms.format(Alarms.scheduleTest(context, seconds, alarmClock));
+            }
+            case "SETTINGS": {
+                Store store = Store.get(context);
+                String json = intent.getStringExtra("json");
+                if (json != null) {
+                    try {
+                        Json.settingsFromJson(json, store.settings());
+                    } catch (org.json.JSONException e) {
+                        return "ERROR bad json: " + e.getMessage();
+                    }
+                    store.saveSettings();
+                    Kiosk.applyDisplaySettings(context, store.settings());
+                    Alarms.scheduleNext(context, "settings via adb");
+                }
+                return Json.settingsToJson(store.settings()).replace("\n", "");
             }
             case "SET_TIME": {
                 long millis = intent.getLongExtra("millis", 0);

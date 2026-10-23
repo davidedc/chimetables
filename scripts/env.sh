@@ -22,12 +22,25 @@ app_cmd() {
 }
 
 # The device has no network, so its clock is set from this Mac (auto time is off).
+clock_offset_ms() {  # device minus Mac, in ms
+    local dev mac
+    dev="$(adb_sh date +%s%N | cut -c1-13)"
+    mac="$(python3 -c 'import time; print(int(time.time()*1000))')"
+    echo $((dev - mac))
+}
 sync_time() {
-    local before after
-    before="$(adb_sh date +%s)"
-    app_cmd SET_TIME --el millis "$(python3 -c 'import time; print(int(time.time()*1000))')" >/dev/null
-    after="$(adb_sh date +%s)"
-    echo "clock synced from Mac: device was $((before - $(date +%s)))s off, now $((after - $(date +%s)))s"
+    # `am broadcast` takes a variable ~0.5-1 s to deliver, so iterate, compensating for the
+    # measured error each time, until the device is within 150 ms.
+    local before after correction=0 pass offset
+    before="$(clock_offset_ms)"
+    for pass in 1 2 3 4; do
+        app_cmd SET_TIME --el millis "$(python3 -c "import time; print(int(time.time()*1000) - ($correction))")" >/dev/null
+        offset="$(clock_offset_ms)"
+        [ "${offset#-}" -lt 150 ] && break
+        correction=$((correction + offset))
+    done
+    after="$(clock_offset_ms)"
+    echo "clock synced from Mac: device was ${before}ms off, now ${after}ms"
 }
 
 die() { echo "ERROR: $*" >&2; exit 1; }

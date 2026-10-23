@@ -207,17 +207,27 @@ public final class Kiosk {
         return summary;
     }
 
+    /** Lifts only the restrictions that block `adb install`, so an update can go in. The kiosk stays. */
+    public static String allowInstalls(Context context) {
+        if (!isDeviceOwner(context)) return "not device owner";
+        DevicePolicyManager dpm = dpm(context);
+        ComponentName admin = AdminReceiver.component(context);
+        dpm.clearUserRestriction(admin, UserManager.DISALLOW_INSTALL_APPS);
+        dpm.clearUserRestriction(admin, UserManager.DISALLOW_UNINSTALL_APPS);
+        String summary = "installs allowed; restrictions " + new java.util.TreeSet<>(dpm.getUserRestrictions(admin).keySet());
+        AppLog.log(context, summary);
+        return summary;
+    }
+
     /**
-     * Emergency undo: clears every restriction this app set, unhides apps, drops the persistent HOME,
+     * Emergency undo: clears every restriction harden.sh set, unhides apps, drops the persistent HOME,
      * re-enables keyguard/status bar, leaves lock task and optionally gives up device ownership.
      */
     public static String unharden(Context context, boolean removeOwner) {
         if (!isDeviceOwner(context)) return "not device owner";
         DevicePolicyManager dpm = dpm(context);
         ComponentName admin = AdminReceiver.component(context);
-        for (String r : new ArrayList<>(dpm.getUserRestrictions(admin).keySet())) {
-            dpm.clearUserRestriction(admin, r);
-        }
+        for (String r : HARDEN_RESTRICTIONS) dpm.clearUserRestriction(admin, r);
         Set<String> hidden = prefs(context).getStringSet(KEY_HIDDEN, new HashSet<String>());
         for (String pkg : hidden) {
             try {

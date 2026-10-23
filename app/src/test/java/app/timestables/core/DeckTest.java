@@ -26,10 +26,21 @@ public class DeckTest {
     }
 
     @Test
-    public void defaultTablesGiveEightyOneDistinctCards() {
-        List<Card> cards = new Deck().active(new Settings().tables, 10);
+    public void defaultIsTwoToTwelveUpToTwelve() {
+        Settings s = new Settings();
+        List<Card> cards = new Deck().active(s.tables, s.maxFactor);
+        assertEquals(121, cards.size());
+        assertEquals(121, new HashSet<>(ids(cards)).size());
+        assertTrue(ids(cards).contains("7x8"));
+        assertTrue(ids(cards).contains("8x7"));
+        assertTrue(ids(cards).contains("12x12"));
+        assertTrue(ids(cards).contains("11x12"));
+    }
+
+    @Test
+    public void twoToTenUpToTenGivesEightyOneCards() {
+        List<Card> cards = new Deck().active(tables(2, 3, 4, 5, 6, 7, 8, 9, 10), 10);
         assertEquals(81, cards.size());
-        assertEquals(81, new HashSet<>(ids(cards)).size());
         assertTrue(ids(cards).contains("7x8"));
         assertTrue(ids(cards).contains("8x7"));
     }
@@ -37,18 +48,19 @@ public class DeckTest {
     @Test
     public void sevenEightAndEightSevenAreSeparateCards() {
         Deck deck = new Deck();
-        deck.active(new Settings().tables, 10);
+        deck.active(new Settings().tables, 12);
         assertNotSame(deck.cards.get("7x8"), deck.cards.get("8x7"));
         assertEquals(56, deck.cards.get("8x7").answer());
     }
 
     @Test
     public void introductionStartsWithTheTwosInterleavingBothOrders() {
-        List<String> ids = ids(new Deck().active(new Settings().tables, 10));
+        Settings s = new Settings();
+        List<String> ids = ids(new Deck().active(s.tables, s.maxFactor));
         assertEquals(Arrays.asList("2x2", "2x3", "3x2", "2x4", "4x2"), ids.subList(0, 5));
-        // 17 "twos" cards (2x2..2x10 and 3x2..10x2), then the tens.
-        assertEquals("10x3", ids.get(17));
-        assertEquals("8x8", ids.get(ids.size() - 1));
+        // 21 "twos" cards (2x2..2x12 and 3x2..12x2), then the tens.
+        assertEquals("10x3", ids.get(21));
+        assertEquals("12x12", ids.get(ids.size() - 1));
     }
 
     @Test

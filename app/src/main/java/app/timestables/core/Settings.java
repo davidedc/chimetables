@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Parent-configurable settings, with the defaults from the spec. */
+/** Parent-configurable settings. Defaults follow the spec, with tables extended to 12 x 12. */
 public final class Settings {
-    public Set<Integer> tables = new TreeSet<>(Arrays.asList(2, 3, 4, 5, 6, 7, 8, 9, 10));
+    public Set<Integer> tables = new TreeSet<>(Arrays.asList(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
     /** Largest second factor (10 or 12). */
-    public int maxFactor = 10;
+    public int maxFactor = 12;
     public List<LocalTime> wakeTimes = new ArrayList<>(Arrays.asList(
             LocalTime.of(7, 45), LocalTime.of(12, 30), LocalTime.of(16, 0), LocalTime.of(18, 0)));
     public LocalTime quietStart = LocalTime.of(19, 30);
