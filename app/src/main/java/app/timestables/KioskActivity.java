@@ -136,6 +136,9 @@ public class KioskActivity extends Activity {
         // The screen went off mid-call or mid-session (power button, or the child walked away and
         // the idle timeout ran out). Progress is saved per answer, so just go back to sleep.
         AppLog.log(this, "screen off during " + mode + (mode == Mode.CALLING ? " after " + beepsPlayed + " beeps" : ""));
+        if ((mode == Mode.QUESTION || mode == Mode.ANSWER) && session != null && session.answers() > 0) {
+            recordSession(); // a partly done session still counts for the streak
+        }
         stopCalling();
         handler.removeCallbacksAndMessages(null);
         releaseScreen();
@@ -265,21 +268,9 @@ public class KioskActivity extends Activity {
         doneTitle = "All done for now!";
         doneDetail = "";
         if (session != null && !session.isEmpty()) {
-            Store store = Store.get(this);
-            Deck deck = store.deck();
-            Srs srs = store.srs();
-            long now = System.currentTimeMillis();
-            long today = srs.dayNumber(now);
-            boolean morning = srs.hourOfDay(now) < MORNING_BEFORE_HOUR;
-            deck.recordSession(today, session.answers(), session.firstTryCorrect(), session.perfect(), morning);
-            Badges.SessionResult result = new Badges.SessionResult();
-            result.perfect = session.perfect();
-            result.comeback = session.comeback();
-            result.morning = morning;
-            List<Badges.Badge> earned = Badges.evaluate(deck, store.activeCards(), store.settings(),
-                    wakesPerDay(store.settings()), today, result, now);
-            store.saveDeck();
-
+            List<Badges.Badge> earned = recordSession();
+            Deck deck = Store.get(this).deck();
+            long today = Store.get(this).srs().dayNumber(System.currentTimeMillis());
             boolean great = session.firstTryCorrect() * 100 >= session.planned() * CELEBRATE_PERCENT;
             celebrate = great || !earned.isEmpty();
             doneEmoji = session.perfect() ? "🎯" : great ? "🎉" : "🌟";
@@ -303,6 +294,26 @@ public class KioskActivity extends Activity {
             Chime.done();
         }
         handler.postDelayed(sleepTask, celebrate ? CELEBRATION_MS : DONE_SCREEN_MS);
+    }
+
+    /** Adds the session to the day's history (streaks) and awards any new badges. */
+    private List<Badges.Badge> recordSession() {
+        Store store = Store.get(this);
+        Deck deck = store.deck();
+        Srs srs = store.srs();
+        long now = System.currentTimeMillis();
+        long today = srs.dayNumber(now);
+        boolean morning = srs.hourOfDay(now) < MORNING_BEFORE_HOUR;
+        deck.recordSession(today, session.answers(), session.firstTryCorrect(), session.perfect(), morning);
+        Badges.SessionResult result = new Badges.SessionResult();
+        result.perfect = session.perfect();
+        result.comeback = session.comeback();
+        result.morning = morning;
+        List<Badges.Badge> earned = Badges.evaluate(deck, store.activeCards(), store.settings(),
+                wakesPerDay(store.settings()), today, result, now);
+        store.saveDeck();
+        if (!earned.isEmpty()) AppLog.log(this, "badges earned: " + earned);
+        return earned;
     }
 
     private static int wakesPerDay(Settings s) {
