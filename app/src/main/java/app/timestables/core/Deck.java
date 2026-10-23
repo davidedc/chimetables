@@ -32,6 +32,8 @@ public final class Deck {
     /** Current and best run of quick (<= 3 s) right answers in a row. */
     public int fastRun;
     public int fastRunBest;
+    /** Celebration stickers already shown (collected), by file name. */
+    public final Set<String> stickers = new java.util.LinkedHashSet<>();
 
     public static final class DayStats {
         public int sessions;
@@ -183,6 +185,7 @@ public final class Deck {
         badges.clear();
         fastRun = 0;
         fastRunBest = 0;
+        stickers.clear();
     }
 
     /** Parent-mode summary for a set of cards. */

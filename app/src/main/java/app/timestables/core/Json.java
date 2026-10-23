@@ -53,6 +53,7 @@ public final class Json {
                     .put("fastRunBest", deck.fastRunBest)
                     .put("days", days)
                     .put("badges", badges)
+                    .put("stickers", new JSONArray(deck.stickers))
                     .put("cards", cards)
                     .toString(1);
         } catch (JSONException e) {
@@ -81,6 +82,8 @@ public final class Json {
                 deck.days.put(Long.parseLong(key), d);
             }
         }
+        JSONArray stickers = root.optJSONArray("stickers");
+        for (int i = 0; stickers != null && i < stickers.length(); i++) deck.stickers.add(stickers.getString(i));
         JSONObject badges = root.optJSONObject("badges");
         if (badges != null) {
             for (java.util.Iterator<String> it = badges.keys(); it.hasNext(); ) {

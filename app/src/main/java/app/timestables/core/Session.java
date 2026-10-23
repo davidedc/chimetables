@@ -14,7 +14,7 @@ import java.util.Set;
  * within the daily cap. A card and its commuted sibling (7x8 / 8x7) are never in the same session,
  * so the second isn't answered from short-term memory (Anki's "bury siblings").
  * A card rated Again comes back {@link #RELEARN_GAP} cards later, at most {@link #MAX_SHOWS} times,
- * after which it simply stays due for the next session.
+ * after which it simply stays due for the next session; when it comes back it can be Good at best.
  */
 public final class Session {
     static final int RELEARN_GAP = 2;
@@ -121,17 +121,21 @@ public final class Session {
         return comeback;
     }
 
-    public void answer(Rating rating, long now) {
-        answer(rating, now, -1);
+    public Rating answer(Rating rating, long now) {
+        return answer(rating, now, -1);
     }
 
-    public void answer(Rating rating, long now, long revealMs) {
+    /** Records an answer for the current card; returns the rating actually applied. */
+    public Rating answer(Rating rating, long now, long revealMs) {
         Card card = queue.remove(0);
         if (card.state == Card.State.NEW) deck.countNewCard(srs.dayNumber(now));
         Integer prev = shows.get(card.id());
         int count = (prev == null ? 0 : prev) + 1;
         shows.put(card.id(), count);
-        if (!firstTry.containsKey(card.id())) firstTry.put(card.id(), rating != Rating.AGAIN);
+        Boolean first = firstTry.get(card.id());
+        if (first == null) firstTry.put(card.id(), rating != Rating.AGAIN);
+        // Missed earlier in this session: getting it right now is good, but not "easy".
+        if (Boolean.FALSE.equals(first) && rating == Rating.EASY) rating = Rating.GOOD;
         answers++;
         deck.recordAnswer(rating, revealMs);
 
@@ -143,5 +147,6 @@ public final class Session {
         } else {
             finished++;
         }
+        return rating;
     }
 }

@@ -92,6 +92,7 @@ public class ParentActivity extends Activity {
                 + "/" + settings.newPerDay + "\n"
                 + st.answers + " answers, " + st.accuracyPercent() + "% Good/Easy\n"
                 + "Streak: " + deck.streak(today) + " day(s) · sessions so far: " + deck.totalSessions() + "\n"
+                + "Stickers collected: " + deck.stickers.size() + "/" + Stickers.all(this).size() + "\n"
                 + "Next wake-up: " + Alarms.format(store.nextWake()));
         body(hardestCards());
         body(slowestCards());

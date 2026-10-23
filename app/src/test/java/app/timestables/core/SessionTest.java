@@ -178,6 +178,21 @@ public class SessionTest {
     }
 
     @Test
+    public void aCardMissedThisSessionCannotComeBackAsEasy() {
+        Deck deck = new Deck();
+        long now = at("2026-10-20T07:45");
+        Session s = plan(deck, now);
+        Card first = s.current();
+        s.answer(Rating.AGAIN, now);
+        s.answer(Rating.GOOD, now);
+        s.answer(Rating.GOOD, now);
+        assertEquals(first, s.current());
+        s.answer(Rating.EASY, now, 1_000);
+        assertEquals(Card.State.LEARNING, first.state); // Easy would have graduated it to 3 days
+        assertEquals(1, first.step);
+    }
+
+    @Test
     public void quickRightAnswersBuildARun() {
         Deck deck = new Deck();
         long now = at("2026-10-20T07:45");

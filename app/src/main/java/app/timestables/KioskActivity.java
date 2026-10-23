@@ -10,12 +10,15 @@ import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.OvershootInterpolator;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import app.timestables.core.Answer;
 import app.timestables.core.Badges;
 import app.timestables.core.Card;
 import app.timestables.core.Deck;
@@ -33,9 +36,10 @@ import java.util.Map;
 
 /**
  * The single screen the child sees. Modes:
- * SLEEPING (screen normally off) -> CALLING (alarm woke us: chime every ~2 min until touched)
- * -> QUESTION <-> ANSWER (Again/Good/Easy) -> DONE ("well done" or a confetti celebration with any
- * new badges, then screen off). Starting needs a full slide, so pocket touches can't.
+ * SLEEPING (screen normally off) -> CALLING (alarm woke us: chime every ~2 min until she slides to
+ * start) -> QUESTION (she types the answer on a keypad) -> FEEDBACK (right, or the correct answer)
+ * -> ... -> DONE ("well done", or confetti + a sticker + any new badges), then screen off.
+ * Answers are graded automatically from correctness and recall speed (see {@link Answer}).
  * Tapping the top-left corner 7 times opens the PIN prompt for parent mode.
  */
 public class KioskActivity extends Activity {
@@ -43,16 +47,18 @@ public class KioskActivity extends Activity {
 
     private static final int CORNER_TAPS = 7;
     private static final long CORNER_WINDOW_MS = 5000;
-    private static final long TAP_GUARD_MS = 450;
+    private static final long TAP_GUARD_MS = 300;
     private static final long DONE_SCREEN_MS = 6000;
     private static final long CELEBRATION_MS = 10_000;
+    private static final long RIGHT_PAUSE_MS = 700;
+    private static final long WRONG_PAUSE_MS = 2800;
     /** Share of cards right first time that earns confetti. */
     private static final int CELEBRATE_PERCENT = 80;
     private static final int MORNING_BEFORE_HOUR = 9;
     /** A session keeps the screen on until this long after the last touch. */
     private static final long SESSION_IDLE_MS = 3 * 60_000L;
 
-    private enum Mode { SLEEPING, CALLING, QUESTION, ANSWER, DONE }
+    private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE }
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Mode mode = Mode.SLEEPING;
@@ -62,25 +68,36 @@ public class KioskActivity extends Activity {
     private int cornerTaps;
     private long firstCornerTap;
     private PowerManager.WakeLock screenLock;
+
+    // Current question
+    private final StringBuilder typed = new StringBuilder();
     private long questionShownAt;
-    private long revealMs = -1;
+    private long firstKeyMs = -1;
+    private Card feedbackCard;
+    private boolean feedbackRight;
+    private String feedbackTyped;
+
+    // Done screen
     private String doneEmoji;
     private String doneTitle;
     private String doneDetail;
+    private Stickers.Sticker doneSticker;
 
     private LinearLayout content;
     private TextView topLine;
     private TextView bigText;
+    private ImageView stickerView;
     private TextView subText;
+    private TextView footer;
     private Button primary;
     private SlideToStart slider;
-    private LinearLayout ratings;
-    private TextView footer;
+    private LinearLayout keypad;
     private ConfettiView confetti;
 
     private final Runnable beepTask = this::beep;
     private final Runnable giveUpTask = this::giveUp;
     private final Runnable sleepTask = this::goToSleep;
+    private final Runnable nextTask = this::next;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -139,7 +156,7 @@ public class KioskActivity extends Activity {
         // The screen went off mid-call or mid-session (power button, or the child walked away and
         // the idle timeout ran out). Progress is saved per answer, so just go back to sleep.
         AppLog.log(this, "screen off during " + mode + (mode == Mode.CALLING ? " after " + beepsPlayed + " beeps" : ""));
-        if ((mode == Mode.QUESTION || mode == Mode.ANSWER) && session != null && session.answers() > 0) {
+        if ((mode == Mode.QUESTION || mode == Mode.FEEDBACK) && session != null && session.answers() > 0) {
             recordSession(); // a partly done session still counts for the streak
         }
         stopCalling();
@@ -239,30 +256,63 @@ public class KioskActivity extends Activity {
             finishSession();
             return;
         }
+        showQuestion();
+    }
+
+    private void showQuestion() {
+        typed.setLength(0);
+        firstKeyMs = -1;
         setMode(Mode.QUESTION);
+        questionShownAt = lastModeChange;
     }
 
-    private void reveal() {
-        revealMs = SystemClock.uptimeMillis() - questionShownAt;
-        setMode(Mode.ANSWER);
+    private void onKey(String key) {
+        if (mode != Mode.QUESTION || session == null || session.current() == null) return;
+        boolean submitted = false;
+        if ("⌫".equals(key)) {
+            if (typed.length() > 0) typed.setLength(typed.length() - 1);
+        } else if ("✓".equals(key)) {
+            submitted = true;
+        } else if (typed.length() < Answer.MAX_DIGITS) {
+            if (firstKeyMs < 0) firstKeyMs = SystemClock.uptimeMillis() - questionShownAt;
+            typed.append(key);
+        }
+        Answer.Check check = Answer.check(typed.toString(), session.current().answer(), submitted);
+        if (check == Answer.Check.INCOMPLETE) {
+            render();
+        } else {
+            answer(check == Answer.Check.CORRECT);
+        }
     }
 
-    private void rate(Rating rating) {
-        if (session == null || session.current() == null) return;
+    private void answer(boolean right) {
         Card card = session.current();
         long now = System.currentTimeMillis();
-        session.answer(rating, now, revealMs);
+        long totalMs = SystemClock.uptimeMillis() - questionShownAt;
+        Rating rating = session.answer(Answer.rate(right, firstKeyMs), now, firstKeyMs);
         Store.get(this).saveDeck();
-        AppLog.log(this, "answer " + card.id() + " " + rating + " in " + revealMs + "ms -> " + card);
-        AppLog.review(this, "{\"t\":" + now + ",\"card\":\"" + card.id() + "\",\"rating\":\"" + rating
-                + "\",\"grade\":\"" + Srs.grade(rating, revealMs) + "\",\"revealMs\":" + revealMs
-                + ",\"state\":\"" + card.state + "\",\"ivl\":" + card.intervalDays + ",\"ease\":"
-                + Math.round(card.ease * 100) / 100.0 + ",\"lapses\":" + card.lapses + ",\"due\":" + card.dueAt + "}");
-        if (rating == Rating.EASY) Chime.easy();
-        else if (rating == Rating.GOOD) Chime.good();
-        else Chime.again();
+        AppLog.log(this, "answer " + card.id() + " typed " + typed + (right ? " right" : " wrong") + " first key "
+                + firstKeyMs + "ms total " + totalMs + "ms -> " + rating + " " + card);
+        AppLog.review(this, "{\"t\":" + now + ",\"card\":\"" + card.id() + "\",\"typed\":\"" + typed
+                + "\",\"right\":" + right + ",\"rating\":\"" + rating + "\",\"grade\":\"" + Srs.grade(rating, firstKeyMs)
+                + "\",\"firstKeyMs\":" + firstKeyMs + ",\"totalMs\":" + totalMs + ",\"state\":\"" + card.state
+                + "\",\"ivl\":" + card.intervalDays + ",\"ease\":" + Math.round(card.ease * 100) / 100.0
+                + ",\"lapses\":" + card.lapses + ",\"due\":" + card.dueAt + "}");
+        if (!right) Chime.again();
+        else if (rating == Rating.EASY) Chime.easy();
+        else Chime.good();
+
+        feedbackCard = card;
+        feedbackRight = right;
+        feedbackTyped = typed.toString();
+        setMode(Mode.FEEDBACK);
+        handler.postDelayed(nextTask, right ? RIGHT_PAUSE_MS : WRONG_PAUSE_MS);
+    }
+
+    private void next() {
+        if (session == null) return;
         if (session.isDone()) finishSession();
-        else setMode(Mode.QUESTION);
+        else showQuestion();
     }
 
     private void finishSession() {
@@ -270,14 +320,23 @@ public class KioskActivity extends Activity {
         doneEmoji = "🌟";
         doneTitle = "All done for now!";
         doneDetail = "";
+        doneSticker = null;
         if (session != null && !session.isEmpty()) {
             List<Badges.Badge> earned = recordSession();
-            Deck deck = Store.get(this).deck();
-            long today = Store.get(this).srs().dayNumber(System.currentTimeMillis());
+            Store store = Store.get(this);
+            Deck deck = store.deck();
+            long today = store.srs().dayNumber(System.currentTimeMillis());
             boolean great = session.firstTryCorrect() * 100 >= session.planned() * CELEBRATE_PERCENT;
             celebrate = great || !earned.isEmpty();
             doneEmoji = session.perfect() ? "🎯" : great ? "🎉" : "🌟";
             doneTitle = session.perfect() ? "Perfect!" : great ? "Amazing!" : "Well done!";
+            if (celebrate) {
+                doneSticker = Stickers.pick(this, deck.stickers);
+                if (doneSticker != null) {
+                    deck.stickers.add(doneSticker.name);
+                    store.saveDeck();
+                }
+            }
             StringBuilder detail = new StringBuilder();
             for (Badges.Badge b : earned) detail.append("New badge: ").append(b.emoji).append(' ').append(b.title).append('\n');
             int streak = deck.streak(today);
@@ -285,7 +344,7 @@ public class KioskActivity extends Activity {
             doneDetail = detail.toString().trim();
             AppLog.log(this, "session done: " + session.finished() + " cards, " + session.firstTryCorrect() + "/"
                     + session.planned() + " right first time, perfect=" + session.perfect() + ", streak=" + streak
-                    + ", new badges=" + earned);
+                    + ", new badges=" + earned + (doneSticker != null ? ", sticker " + doneSticker.name : ""));
         } else {
             AppLog.log(this, "session done: nothing to practise");
         }
@@ -293,6 +352,7 @@ public class KioskActivity extends Activity {
         if (celebrate) {
             confetti.burst();
             Chime.fanfare();
+            if (doneSticker != null) popIn(stickerView);
         } else {
             Chime.done();
         }
@@ -339,16 +399,20 @@ public class KioskActivity extends Activity {
     private void setMode(Mode m) {
         mode = m;
         lastModeChange = SystemClock.uptimeMillis();
-        if (m == Mode.QUESTION) {
-            questionShownAt = lastModeChange;
-            revealMs = -1;
-        }
         render();
     }
 
-    /** Stops a fast double-tap from answering the next card too. */
+    /** Stops a fast double-tap from also hitting the next screen. */
     private boolean tapAllowed() {
         return SystemClock.uptimeMillis() - lastModeChange > TAP_GUARD_MS;
+    }
+
+    private static void popIn(View v) {
+        v.setScaleX(0.2f);
+        v.setScaleY(0.2f);
+        v.setRotation(-14);
+        v.animate().scaleX(1f).scaleY(1f).rotation(0).setDuration(550)
+                .setInterpolator(new OvershootInterpolator(2.2f)).start();
     }
 
     // ---------------------------------------------------------------- views
@@ -360,36 +424,42 @@ public class KioskActivity extends Activity {
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setGravity(Gravity.CENTER_HORIZONTAL);
-        int pad = Ui.dp(this, 16);
-        content.setPadding(pad, Ui.dp(this, 28), pad, Ui.dp(this, 20));
+        int pad = Ui.dp(this, 14);
+        content.setPadding(pad, Ui.dp(this, 22), pad, Ui.dp(this, 14));
         root.addView(content, new FrameLayout.LayoutParams(-1, -1));
 
         topLine = Ui.text(this, 30, Ui.ORANGE, true);
         content.addView(topLine, new LinearLayout.LayoutParams(-1, -2));
 
+        // The question (or emoji) and, on celebrations, the sticker share the big slot.
+        FrameLayout hero = new FrameLayout(this);
         bigText = Ui.text(this, 96, Ui.INK, true);
         bigText.setAutoSizeTextTypeUniformWithConfiguration(36, 110, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         bigText.setMaxLines(2);
-        content.addView(bigText, new LinearLayout.LayoutParams(-1, 0, 3f));
+        hero.addView(bigText, new FrameLayout.LayoutParams(-1, -1));
+        stickerView = new ImageView(this);
+        stickerView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        stickerView.setVisibility(View.GONE);
+        hero.addView(stickerView, new FrameLayout.LayoutParams(-1, -1));
+        content.addView(hero, new LinearLayout.LayoutParams(-1, 0, 3f));
 
         subText = Ui.text(this, 64, Ui.INK, true);
-        subText.setAutoSizeTextTypeUniformWithConfiguration(24, 88, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
+        subText.setAutoSizeTextTypeUniformWithConfiguration(22, 80, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
+        subText.setMaxLines(2);
         content.addView(subText, new LinearLayout.LayoutParams(-1, 0, 2f));
 
-        // Hint / badges / streak line, just above the buttons.
+        // Hint / feedback / badges / streak line, just above the buttons.
         footer = Ui.text(this, 16, Ui.SOFT_INK, false);
         LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, -2);
         fp.bottomMargin = Ui.dp(this, 4);
         content.addView(footer, fp);
 
         primary = Ui.button(this, "", Ui.ORANGE, 30);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 96));
-        lp.topMargin = Ui.dp(this, 8);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 92));
+        lp.topMargin = Ui.dp(this, 6);
         content.addView(primary, lp);
         primary.setOnClickListener(v -> {
-            if (!tapAllowed()) return;
-            if (mode == Mode.QUESTION) reveal();
-            else if (mode == Mode.DONE) goToSleep();
+            if (mode == Mode.DONE && tapAllowed()) goToSleep();
         });
 
         // Starting a session needs a deliberate slide, so pocket touches can't start one.
@@ -398,47 +468,38 @@ public class KioskActivity extends Activity {
             if (mode == Mode.CALLING || mode == Mode.SLEEPING) startSession();
         });
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 88));
-        sp.topMargin = Ui.dp(this, 8);
+        sp.topMargin = Ui.dp(this, 6);
         content.addView(slider, sp);
 
-        ratings = new LinearLayout(this);
-        ratings.setOrientation(LinearLayout.HORIZONTAL);
-        ratings.addView(ratingButton("🔁\nAgain", Ui.BLUE, Rating.AGAIN), ratingParams());
-        ratings.addView(ratingButton("👍\nGood", Ui.GREEN, Rating.GOOD), ratingParams());
-        ratings.addView(ratingButton("⭐\nEasy", Ui.GOLD, Rating.EASY), ratingParams());
-        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
-        rp.topMargin = Ui.dp(this, 8);
-        content.addView(ratings, rp);
-
+        keypad = buildKeypad();
+        content.addView(keypad, new LinearLayout.LayoutParams(-1, -2));
 
         confetti = new ConfettiView(this);
         confetti.setVisibility(View.INVISIBLE);
         root.addView(confetti, new FrameLayout.LayoutParams(-1, -1));
 
-        // Tapping the question area also reveals the answer.
-        bigText.setOnClickListener(v -> {
-            if (mode == Mode.QUESTION && tapAllowed()) reveal();
-        });
-        subText.setOnClickListener(v -> {
-            if (mode == Mode.QUESTION && tapAllowed()) reveal();
-        });
-
         setContentView(root);
     }
 
-    private Button ratingButton(String label, int color, Rating rating) {
-        Button b = Ui.button(this, label, color, 24);
-        b.setOnClickListener(v -> {
-            if (mode == Mode.ANSWER && tapAllowed()) rate(rating);
-        });
-        return b;
-    }
-
-    private LinearLayout.LayoutParams ratingParams() {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -1, 1f);
-        int m = Ui.dp(this, 4);
-        p.setMargins(m, 0, m, 0);
-        return p;
+    private LinearLayout buildKeypad() {
+        LinearLayout pad = new LinearLayout(this);
+        pad.setOrientation(LinearLayout.VERTICAL);
+        String[][] rows = {{"1", "2", "3"}, {"4", "5", "6"}, {"7", "8", "9"}, {"⌫", "0", "✓"}};
+        for (String[] row : rows) {
+            LinearLayout line = new LinearLayout(this);
+            line.setOrientation(LinearLayout.HORIZONTAL);
+            for (String key : row) {
+                int color = "✓".equals(key) ? Ui.GREEN : "⌫".equals(key) ? Ui.SOFT_INK : Ui.BLUE;
+                Button b = Ui.button(this, key, color, 30);
+                b.setOnClickListener(v -> onKey(key));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, Ui.dp(this, 58), 1f);
+                int m = Ui.dp(this, 4);
+                p.setMargins(m, m, m, m);
+                line.addView(b, p);
+            }
+            pad.addView(line, new LinearLayout.LayoutParams(-1, -2));
+        }
+        return pad;
     }
 
     private void render() {
@@ -448,10 +509,13 @@ public class KioskActivity extends Activity {
         content.setBackgroundColor(night ? Ui.NIGHT : Ui.BG);
         bigText.setTextColor(night ? Ui.NIGHT_INK : Ui.INK);
         subText.setTextColor(night ? Ui.NIGHT_INK : Ui.INK);
-        primary.setVisibility(View.VISIBLE);
+        bigText.setVisibility(View.VISIBLE);
+        stickerView.setVisibility(View.GONE);
+        primary.setVisibility(View.GONE);
         slider.setVisibility(View.GONE);
         slider.reset();
-        ratings.setVisibility(View.GONE);
+        keypad.setVisibility(View.GONE);
+        keypad.setAlpha(1f);
         footer.setText("");
         footer.setTextSize(16);
         footer.setTextColor(night ? Ui.NIGHT_INK : Ui.SOFT_INK);
@@ -464,14 +528,13 @@ public class KioskActivity extends Activity {
                 subText.setText(next > 0 ? "Zzz… see you at " + Alarms.formatTime(next) : "Zzz…");
                 Settings s = store.settings();
                 boolean due = !Session.nothingToDo(store.deck(), store.srs(), store.activeCards(), s.newPerDay, now);
-                primary.setVisibility(View.GONE);
                 slider.setVisibility(due ? View.VISIBLE : View.GONE);
                 slider.setLabel("Slide to play");
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
                 } else {
                     footer.setTextSize(20);
-                    footer.setText(trophyShelf(store.deck(), store.srs().dayNumber(now)));
+                    footer.setText(trophyShelf(store.deck(), store.srs().dayNumber(now), Stickers.all(this).size()));
                 }
                 break;
             }
@@ -479,45 +542,61 @@ public class KioskActivity extends Activity {
                 topLine.setText("🔔 🔔 🔔");
                 bigText.setText("Times\ntables!");
                 subText.setText("👋");
-                primary.setVisibility(View.GONE);
                 slider.setVisibility(View.VISIBLE);
                 slider.setLabel("Slide to start");
                 break;
-            case QUESTION:
-            case ANSWER: {
+            case QUESTION: {
                 Card card = session.current();
                 topLine.setText(progressStars());
                 bigText.setText(card.a + " × " + card.b);
+                subText.setText("= " + (typed.length() == 0 ? "?" : typed));
+                subText.setTextColor(typed.length() == 0 ? Ui.SOFT_INK : Ui.INK);
                 if (card.tricky) footer.setText("💪 A tricky one: you can do it!");
-                if (mode == Mode.QUESTION) {
-                    subText.setText("= ?");
-                    subText.setTextColor(Ui.SOFT_INK);
-                    primary.setText("Show answer 👀");
-                } else {
-                    subText.setText("= " + card.answer());
-                    subText.setTextColor(Ui.GREEN);
-                    primary.setVisibility(View.GONE);
-                    ratings.setVisibility(View.VISIBLE);
+                keypad.setVisibility(View.VISIBLE);
+                break;
+            }
+            case FEEDBACK: {
+                topLine.setText(progressStars());
+                bigText.setText(feedbackCard.a + " × " + feedbackCard.b);
+                subText.setText("= " + feedbackCard.answer() + (feedbackRight ? " ✓" : ""));
+                subText.setTextColor(Ui.GREEN);
+                if (!feedbackRight) {
+                    footer.setTextSize(20);
+                    footer.setTextColor(Ui.INK);
+                    footer.setText("Not " + feedbackTyped + " — let's remember " + feedbackCard.answer() + "!");
                 }
+                keypad.setVisibility(View.VISIBLE);
+                keypad.setAlpha(0.35f);
                 break;
             }
             case DONE:
-                topLine.setText(progressStars());
-                bigText.setText(doneEmoji);
-                subText.setText(doneTitle);
-                footer.setTextSize(22);
+                topLine.setText(doneSticker != null ? doneEmoji + " " + doneTitle : progressStars());
+                if (doneSticker != null) {
+                    bigText.setVisibility(View.INVISIBLE);
+                    stickerView.setImageBitmap(doneSticker.bitmap);
+                    stickerView.setVisibility(View.VISIBLE);
+                    subText.setText(doneSticker.phrase);
+                } else {
+                    bigText.setText(doneEmoji);
+                    subText.setText(doneTitle);
+                }
+                footer.setTextSize(20);
                 footer.setTextColor(Ui.INK);
                 footer.setText(doneDetail);
+                primary.setVisibility(View.VISIBLE);
                 primary.setText("Bye bye 👋");
                 break;
         }
     }
 
-    /** Streak and the most recent badges, for the sleeping screen. */
-    private static String trophyShelf(Deck deck, long today) {
+    /** Streak, recent badges and the sticker collection, for the sleeping screen. */
+    private static String trophyShelf(Deck deck, long today, int stickersAvailable) {
         StringBuilder sb = new StringBuilder();
         int streak = deck.streak(today);
         if (streak >= 1) sb.append("🔥 ").append(streak).append(streak == 1 ? " day" : " days in a row");
+        if (stickersAvailable > 0 && !deck.stickers.isEmpty()) {
+            sb.append(sb.length() > 0 ? "  ·  " : "").append("🖼️ ").append(deck.stickers.size()).append('/').append(stickersAvailable);
+        }
         if (!deck.badges.isEmpty()) {
             List<Map.Entry<String, Long>> earned = new ArrayList<>(deck.badges.entrySet());
             earned.sort((x, y) -> Long.compare(y.getValue(), x.getValue()));
@@ -556,12 +635,13 @@ public class KioskActivity extends Activity {
                 return true; // corner taps never reach the cards
             }
             if (mode != Mode.SLEEPING && mode != Mode.CALLING) holdScreen(SESSION_IDLE_MS);
+            if (!tapAllowed() && (mode == Mode.QUESTION || mode == Mode.DONE)) return true;
         }
         return super.dispatchTouchEvent(ev);
     }
 
     private boolean isTopLeftCorner(MotionEvent ev) {
-        float size = Ui.dp(this, 72);
+        float size = Ui.dp(this, 64);
         return ev.getX() < size && ev.getY() < size;
     }
 

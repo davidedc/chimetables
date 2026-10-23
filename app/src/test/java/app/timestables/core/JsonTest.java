@@ -25,6 +25,7 @@ public class JsonTest {
         deck.recordSession(20_000, 6, 5, false, true);
         deck.badges.put("first_session", 123L);
         deck.fastRunBest = 7;
+        deck.stickers.add("salish_wow.png");
 
         Deck back = Json.deckFromJson(Json.deckToJson(deck));
         assertEquals(deck.cards.size(), back.cards.size());
@@ -44,6 +45,7 @@ public class JsonTest {
         assertTrue(back.days.get(20_000L).morning);
         assertEquals(Long.valueOf(123L), back.badges.get("first_session"));
         assertEquals(7, back.fastRunBest);
+        assertTrue(back.stickers.contains("salish_wow.png"));
     }
 
     @Test

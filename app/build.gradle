@@ -56,6 +56,12 @@ android {
         checkReleaseBuilds = false
     }
 
+    // Personal celebration stickers live outside git (see README "Stickers"); bundle them if present.
+    def familyAssets = rootProject.file('family-assets')
+    if (familyAssets.exists()) {
+        sourceSets.main.assets.srcDir(familyAssets)
+    }
+
     testOptions {
         unitTests.returnDefaultValues = true
     }
