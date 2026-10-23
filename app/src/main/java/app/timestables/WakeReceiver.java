@@ -17,6 +17,10 @@ public class WakeReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        if (Maintenance.ACTION_END.equals(intent.getAction())) {
+            Maintenance.end(context);
+            return;
+        }
         if (!Alarms.ACTION_WAKE.equals(intent.getAction())) return;
         String kind = intent.getStringExtra(Alarms.EXTRA_KIND);
         long at = intent.getLongExtra(Alarms.EXTRA_AT, 0);

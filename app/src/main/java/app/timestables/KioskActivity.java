@@ -1,19 +1,16 @@
 package app.timestables;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -91,6 +88,7 @@ public class KioskActivity extends Activity {
         hideSystemBars();
         Store store = Store.get(this);
         long now = System.currentTimeMillis();
+        if (store.maintenanceUntil() > 0 && !store.inMaintenance(now)) Maintenance.end(this);
         if (Kiosk.isDeviceOwner(this) && !store.inMaintenance(now)) {
             Kiosk.allowLockTask(this);
             Kiosk.dpm(this).setStatusBarDisabled(AdminReceiver.component(this), true);
@@ -415,19 +413,9 @@ public class KioskActivity extends Activity {
             Toast.makeText(this, "Try again later", Toast.LENGTH_SHORT).show();
             return;
         }
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        input.setTextSize(28);
-        input.setGravity(Gravity.CENTER);
         final boolean firstTime = store.pinHash() == null;
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(firstTime ? "Choose a parent PIN (4-8 digits)" : "Parent PIN")
-                .setView(input)
-                .setPositiveButton("OK", (d, w) -> checkPin(input.getText().toString(), firstTime))
-                .setNegativeButton("Cancel", null)
-                .create();
-        dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-        dialog.show();
+        PinPad.show(this, firstTime ? "Choose a parent PIN (4-8 digits)" : "Parent PIN",
+                pin -> checkPin(pin, firstTime));
     }
 
     private void checkPin(String pin, boolean firstTime) {

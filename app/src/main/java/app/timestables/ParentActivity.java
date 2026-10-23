@@ -8,12 +8,10 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -34,7 +32,6 @@ import java.util.TreeSet;
 /** PIN-protected settings. Changes are saved and applied when leaving the screen. */
 public class ParentActivity extends Activity {
     private static final long IDLE_CLOSE_MS = 3 * 60_000L;
-    private static final long MAINTENANCE_MS = 30 * 60_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable idleClose = this::finish;
@@ -187,7 +184,7 @@ public class ParentActivity extends Activity {
                 .show()));
         if (store.inMaintenance(now)) {
             row(button("Resume kiosk now", Ui.GREEN, v -> {
-                Store.get(this).setMaintenanceUntil(0);
+                Maintenance.end(this);
                 finish();
             }));
         } else {
@@ -211,14 +208,9 @@ public class ParentActivity extends Activity {
     }
 
     private void exitKiosk() {
-        Store store = Store.get(this);
-        store.setMaintenanceUntil(System.currentTimeMillis() + MAINTENANCE_MS);
-        store.saveSettings();
+        Store.get(this).saveSettings();
         AppLog.log(this, "parent: exit kiosk for maintenance");
-        if (Kiosk.isDeviceOwner(this)) {
-            Kiosk.dpm(this).setStatusBarDisabled(AdminReceiver.component(this), false);
-            Kiosk.releaseLockTask(this);
-        }
+        Maintenance.start(this);
         try {
             startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (RuntimeException e) {
@@ -228,25 +220,15 @@ public class ParentActivity extends Activity {
     }
 
     private void changePin() {
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        input.setGravity(Gravity.CENTER);
-        input.setTextSize(28);
-        new AlertDialog.Builder(this)
-                .setTitle("New PIN (4-8 digits)")
-                .setView(input)
-                .setPositiveButton("Save", (d, w) -> {
-                    String pin = input.getText().toString();
-                    if (!PinHasher.isValidPin(pin)) {
-                        toast("PIN must be 4-8 digits");
-                        return;
-                    }
-                    Store.get(this).setPinHash(PinHasher.hash(pin));
-                    AppLog.log(this, "parent PIN changed");
-                    toast("PIN changed");
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        PinPad.show(this, "New PIN (4-8 digits)", pin -> {
+            if (!PinHasher.isValidPin(pin)) {
+                toast("PIN must be 4-8 digits");
+                return;
+            }
+            Store.get(this).setPinHash(PinHasher.hash(pin));
+            AppLog.log(this, "parent PIN changed");
+            toast("PIN changed");
+        });
     }
 
     private void replaceTime(LocalTime old, LocalTime picked) {
