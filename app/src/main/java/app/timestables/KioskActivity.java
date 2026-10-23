@@ -11,6 +11,7 @@ import android.widget.TextView;
 
 /** Skeleton for gates G1-G3: shows device-owner / lock-task state and enters lock task when allowed. */
 public class KioskActivity extends Activity {
+    public static final String ACTION_WAKE = "app.timestables.action.WAKE";
     private static final int CORNER_TAPS = 7;
     private static final long CORNER_WINDOW_MS = 4000;
 
