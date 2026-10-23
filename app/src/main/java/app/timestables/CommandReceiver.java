@@ -26,6 +26,8 @@ import java.util.List;
  *   HARDEN | UNHARDEN [--ez remove_owner true]
  *   SET_PIN --es pin 1234
  *   TEST_WAKE --ei seconds 60 [--es method alarmclock|exact]
+ *   SET_TIME --el millis <epoch ms>        (auto time is switched off)
+ *   RESTRICT --es add|clear no_safe_boot
  *   SCHEDULE | BEEP | RESET_PROGRESS
  * </pre>
  */
@@ -73,6 +75,18 @@ public class CommandReceiver extends BroadcastReceiver {
                 int seconds = intent.getIntExtra("seconds", 60);
                 boolean alarmClock = !"exact".equals(intent.getStringExtra("method"));
                 return "test wake at " + Alarms.format(Alarms.scheduleTest(context, seconds, alarmClock));
+            }
+            case "SET_TIME": {
+                long millis = intent.getLongExtra("millis", 0);
+                if (millis < 1_600_000_000_000L) return "ERROR --el millis <epoch ms> required";
+                return Kiosk.setTime(context, millis) + "; now " + Alarms.format(System.currentTimeMillis());
+            }
+            case "RESTRICT": {
+                String add = intent.getStringExtra("add");
+                String clear = intent.getStringExtra("clear");
+                if (add != null) return Kiosk.restrict(context, add, true);
+                if (clear != null) return Kiosk.restrict(context, clear, false);
+                return "ERROR --es add|clear <restriction> required";
             }
             case "SCHEDULE":
                 return "next wake " + Alarms.format(Alarms.scheduleNext(context, "adb"));

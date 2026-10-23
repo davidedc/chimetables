@@ -77,6 +77,8 @@
                 <action android:name="app.timestables.cmd.UNHARDEN" />
                 <action android:name="app.timestables.cmd.SET_PIN" />
                 <action android:name="app.timestables.cmd.TEST_WAKE" />
+                <action android:name="app.timestables.cmd.SET_TIME" />
+                <action android:name="app.timestables.cmd.RESTRICT" />
                 <action android:name="app.timestables.cmd.SCHEDULE" />
                 <action android:name="app.timestables.cmd.BEEP" />
                 <action android:name="app.timestables.cmd.RESET_PROGRESS" />

@@ -97,7 +97,9 @@ public final class Kiosk {
         }
         notes.add(applyDisplaySettings(context, s));
         tryGlobal(dpm, admin, Global.STAY_ON_WHILE_PLUGGED_IN, "0", notes);
-        tryGlobal(dpm, admin, Global.AUTO_TIME, "1", notes);
+        // No network on this device, so network time can never sync. Auto time stays off and the
+        // scripts set the clock from the Mac instead (setTime() refuses while auto time is on).
+        tryGlobal(dpm, admin, Global.AUTO_TIME, "0", notes);
 
         String summary = String.join(", ", notes);
         AppLog.log(context, "base policies: " + summary);
@@ -140,6 +142,33 @@ public final class Kiosk {
         return String.join(", ", notes);
     }
 
+    /** Sets the wall clock (device owner, auto time must be off). */
+    public static String setTime(Context context, long millis) {
+        if (!isDeviceOwner(context)) return "not device owner";
+        DevicePolicyManager dpm = dpm(context);
+        ComponentName admin = AdminReceiver.component(context);
+        List<String> notes = new ArrayList<>();
+        tryGlobal(dpm, admin, Global.AUTO_TIME, "0", notes);
+        long before = java.lang.System.currentTimeMillis();
+        boolean ok = dpm.setTime(admin, millis);
+        notes.add("setTime=" + ok + " correction=" + (millis - before) + "ms");
+        String summary = String.join(", ", notes);
+        AppLog.log(context, "clock: " + summary);
+        return summary;
+    }
+
+    /** Adds or clears one user restriction (testing, e.g. DISALLOW_SAFE_BOOT before full hardening). */
+    public static String restrict(Context context, String key, boolean add) {
+        if (!isDeviceOwner(context)) return "not device owner";
+        DevicePolicyManager dpm = dpm(context);
+        ComponentName admin = AdminReceiver.component(context);
+        if (add) dpm.addUserRestriction(admin, key);
+        else dpm.clearUserRestriction(admin, key);
+        String summary = (add ? "added " : "cleared ") + key + "; now " + new java.util.TreeSet<>(dpm.getUserRestrictions(admin).keySet());
+        AppLog.log(context, "restriction " + summary);
+        return summary;
+    }
+
     /** Hides the given packages (they stop running and vanish for the user). Remembers them for unharden. */
     public static String hidePackages(Context context, List<String> packages) {
         if (!isDeviceOwner(context)) return "not device owner";
@@ -173,7 +202,7 @@ public final class Kiosk {
         DevicePolicyManager dpm = dpm(context);
         ComponentName admin = AdminReceiver.component(context);
         for (String r : HARDEN_RESTRICTIONS) dpm.addUserRestriction(admin, r);
-        String summary = "restrictions " + dpm.getUserRestrictions(admin).keySet();
+        String summary = "restrictions " + new java.util.TreeSet<>(dpm.getUserRestrictions(admin).keySet());
         AppLog.log(context, "harden: " + summary);
         return summary;
     }

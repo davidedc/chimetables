@@ -11,6 +11,7 @@
 #   - DND off, so the alarm-stream chime is never silenced
 #   - app policies (via the app): lock task, kiosk as permanent HOME, keyguard + status bar off,
 #     30 s screen timeout, fixed brightness, OTA postponed, Europe/London, hide other apps
+#   - clock set from this Mac (no network on the device; auto time off)
 # Does NOT add the restrictions that block adb installs: that is scripts/harden.sh.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
@@ -80,5 +81,6 @@ if adb_sh pm path "$PKG.devopts" | grep -q package:; then
 fi
 
 adb_sh am start -n "$PKG/.KioskActivity" >/dev/null
+sync_time
 echo "== status"
 app_cmd STATUS | tr ' ' '\n' | sed 's/^/  /'

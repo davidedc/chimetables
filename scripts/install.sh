@@ -20,4 +20,5 @@ case "$out" in
 esac
 
 adb_sh am start -n "$PKG/.KioskActivity" >/dev/null
+sync_time
 echo "Installed $(adb_sh dumpsys package "$PKG" | sed -n 's/^ *versionName=//p' | head -1) ($variant)"

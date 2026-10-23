@@ -21,4 +21,13 @@ app_cmd() {
         | sed -n 's/.*data="\(.*\)"$/\1/p'
 }
 
+# The device has no network, so its clock is set from this Mac (auto time is off).
+sync_time() {
+    local before after
+    before="$(adb_sh date +%s)"
+    app_cmd SET_TIME --el millis "$(python3 -c 'import time; print(int(time.time()*1000))')" >/dev/null
+    after="$(adb_sh date +%s)"
+    echo "clock synced from Mac: device was $((before - $(date +%s)))s off, now $((after - $(date +%s)))s"
+}
+
 die() { echo "ERROR: $*" >&2; exit 1; }

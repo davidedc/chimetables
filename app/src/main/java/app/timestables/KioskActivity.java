@@ -5,11 +5,11 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -35,6 +35,8 @@ public class KioskActivity extends Activity {
     private static final long CORNER_WINDOW_MS = 5000;
     private static final long TAP_GUARD_MS = 450;
     private static final long DONE_SCREEN_MS = 6000;
+    /** A session keeps the screen on until this long after the last touch. */
+    private static final long SESSION_IDLE_MS = 3 * 60_000L;
 
     private enum Mode { SLEEPING, CALLING, QUESTION, ANSWER, DONE }
 
@@ -45,6 +47,7 @@ public class KioskActivity extends Activity {
     private long lastModeChange;
     private int cornerTaps;
     private long firstCornerTap;
+    private PowerManager.WakeLock screenLock;
 
     private LinearLayout content;
     private TextView topLine;
@@ -108,13 +111,35 @@ public class KioskActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
-        if (mode == Mode.CALLING && !isChangingConfigurations()) {
-            // Screen turned off (power button) while calling: the child dismissed it.
-            AppLog.log(this, "calling dismissed (screen off) after " + beepsPlayed + " beeps");
-            stopCalling();
-            mode = Mode.SLEEPING;
-            render();
+        if (isChangingConfigurations() || mode == Mode.SLEEPING) return;
+        // The screen went off mid-call or mid-session (power button, or the child walked away and
+        // the idle timeout ran out). Progress is saved per answer, so just go back to sleep.
+        AppLog.log(this, "screen off during " + mode + (mode == Mode.CALLING ? " after " + beepsPlayed + " beeps" : ""));
+        stopCalling();
+        handler.removeCallbacksAndMessages(null);
+        releaseScreen();
+        session = null;
+        mode = Mode.SLEEPING;
+        render();
+        Alarms.scheduleNext(this, "screen off");
+    }
+
+    /**
+     * Keeps the screen on with our own wake lock. FLAG_KEEP_SCREEN_ON is not reliable on this
+     * firmware after an alarm wake (gate G4), so it is not used.
+     */
+    @SuppressWarnings("deprecation")
+    private void holdScreen(long millis) {
+        if (screenLock == null) {
+            screenLock = getSystemService(PowerManager.class).newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE, "timestables:screen");
+            screenLock.setReferenceCounted(false);
         }
+        screenLock.acquire(millis);
+    }
+
+    private void releaseScreen() {
+        if (screenLock != null && screenLock.isHeld()) screenLock.release();
     }
 
     @Override
@@ -147,8 +172,9 @@ public class KioskActivity extends Activity {
         mode = Mode.CALLING;
         beepsPlayed = 0;
         lastModeChange = SystemClock.uptimeMillis();
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        AppLog.log(this, "calling: screenOn=" + getSystemService(android.os.PowerManager.class).isInteractive());
+        Settings s = Store.get(this).settings();
+        holdScreen((long) s.beepRepeats * s.beepIntervalSeconds * 1000L + 30_000L);
+        AppLog.log(this, "calling: screenOn=" + getSystemService(PowerManager.class).isInteractive());
         render();
         beep();
     }
@@ -180,7 +206,7 @@ public class KioskActivity extends Activity {
         Settings s = store.settings();
         session = Session.plan(store.deck(), store.srs(), store.activeCards(), s.sessionSize, s.newPerDay,
                 System.currentTimeMillis());
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        holdScreen(SESSION_IDLE_MS);
         AppLog.log(this, "session start: " + session.planned() + " cards");
         if (session.isEmpty()) {
             finishSession();
@@ -217,7 +243,7 @@ public class KioskActivity extends Activity {
         handler.removeCallbacksAndMessages(null);
         session = null;
         mode = Mode.SLEEPING;
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        releaseScreen();
         render();
         Alarms.scheduleNext(this, "sleep");
         Kiosk.screenOff(this);
@@ -397,6 +423,7 @@ public class KioskActivity extends Activity {
                 startSession(); // any touch answers the call
                 return true;
             }
+            if (mode != Mode.SLEEPING) holdScreen(SESSION_IDLE_MS);
         }
         return super.dispatchTouchEvent(ev);
     }
