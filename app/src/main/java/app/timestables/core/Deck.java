@@ -8,11 +8,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * All cards the child has ever had, keyed by id, plus the daily new-card counter.
- * Cards for tables that are later deselected keep their progress but are left out of sessions.
+ * All cards the child has ever had, keyed by id, plus the daily new-card counter, per-day history
+ * (for streaks) and earned badges. Cards for tables that are later deselected keep their progress
+ * but are left out of sessions.
  */
 public final class Deck {
     /** Order in which tables are introduced, easiest first. */
@@ -23,6 +25,21 @@ public final class Deck {
     /** Local day number and count of NEW cards first shown that day. */
     public long newDay;
     public int newCount;
+    /** Local day number -> what happened that day. */
+    public final TreeMap<Long, DayStats> days = new TreeMap<>();
+    /** Badge id -> when it was earned (epoch millis). */
+    public final Map<String, Long> badges = new LinkedHashMap<>();
+    /** Current and best run of quick (<= 3 s) right answers in a row. */
+    public int fastRun;
+    public int fastRunBest;
+
+    public static final class DayStats {
+        public int sessions;
+        public int answers;
+        public int correct;
+        public int perfect;
+        public boolean morning;
+    }
 
     /**
      * The cards for the selected tables, created on demand, in introduction order.
@@ -97,10 +114,75 @@ public final class Deck {
         newCount++;
     }
 
+    /** Updates the quick-answer run after each answer. */
+    public void recordAnswer(Rating rating, long revealMs) {
+        if (rating != Rating.AGAIN && revealMs > 0 && revealMs <= Badges.SPEEDY_MS) {
+            fastRun++;
+            fastRunBest = Math.max(fastRunBest, fastRun);
+        } else {
+            fastRun = 0;
+        }
+    }
+
+    public void recordSession(long day, int answers, int correct, boolean perfect, boolean morning) {
+        DayStats d = days.get(day);
+        if (d == null) {
+            d = new DayStats();
+            days.put(day, d);
+        }
+        d.sessions++;
+        d.answers += answers;
+        d.correct += correct;
+        if (perfect) d.perfect++;
+        d.morning |= morning;
+    }
+
+    /**
+     * Days in a row with at least one session, ending today, or yesterday if today has none yet
+     * (so the streak doesn't look broken before the first session of the day).
+     */
+    public int streak(long today) {
+        long day = today;
+        if (!practised(day)) day--;
+        int n = 0;
+        while (practised(day)) {
+            n++;
+            day--;
+        }
+        return n;
+    }
+
+    private boolean practised(long day) {
+        DayStats d = days.get(day);
+        return d != null && d.sessions > 0;
+    }
+
+    public int totalSessions() {
+        int n = 0;
+        for (DayStats d : days.values()) n += d.sessions;
+        return n;
+    }
+
+    public int totalPerfect() {
+        int n = 0;
+        for (DayStats d : days.values()) n += d.perfect;
+        return n;
+    }
+
+    public int morningDays() {
+        int n = 0;
+        for (DayStats d : days.values()) if (d.morning) n++;
+        return n;
+    }
+
     public void reset() {
         cards.clear();
         newDay = 0;
         newCount = 0;
+        days.clear();
+        badges.clear();
+        fastRun = 0;
+        fastRunBest = 0;
     }
 
     /** Parent-mode summary for a set of cards. */
@@ -113,7 +195,8 @@ public final class Deck {
                 continue;
             }
             if (c.isDue(now)) s.due++;
-            if (c.state == Card.State.REVIEW && c.intervalDays >= 21) s.mastered++;
+            if (c.tricky) s.tricky++;
+            if (c.isMastered()) s.mastered++;
             else s.learning++;
             s.answers += c.seen;
             s.correct += c.correct;
@@ -127,6 +210,7 @@ public final class Deck {
         public int learning;
         public int mastered;
         public int due;
+        public int tricky;
         public int answers;
         public int correct;
 

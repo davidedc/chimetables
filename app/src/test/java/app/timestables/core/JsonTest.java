@@ -3,6 +3,7 @@ package app.timestables.core;
 import static app.timestables.core.SrsTest.LONDON;
 import static app.timestables.core.SrsTest.at;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.time.LocalTime;
 import java.util.Arrays;
@@ -14,11 +15,16 @@ public class JsonTest {
     @Test
     public void deckRoundTripKeepsSchedulingState() throws Exception {
         Deck deck = new Deck();
-        Srs srs = new Srs(LONDON);
+        Srs srs = new Srs(LONDON, null);
         Card c = deck.active(new Settings().tables, 10).get(3);
         srs.answer(c, Rating.EASY, at("2026-10-20T07:45"));
         srs.answer(c, Rating.AGAIN, c.dueAt + 1000);
         deck.countNewCard(srs.dayNumber(at("2026-10-20T07:45")));
+        c.tricky = true;
+        c.revealMsAvg = 2345;
+        deck.recordSession(20_000, 6, 5, false, true);
+        deck.badges.put("first_session", 123L);
+        deck.fastRunBest = 7;
 
         Deck back = Json.deckFromJson(Json.deckToJson(deck));
         assertEquals(deck.cards.size(), back.cards.size());
@@ -32,6 +38,12 @@ public class JsonTest {
         assertEquals(c.lapses, b.lapses);
         assertEquals(c.seen, b.seen);
         assertEquals(c.correct, b.correct);
+        assertTrue(b.tricky);
+        assertEquals(2345, b.revealMsAvg);
+        assertEquals(1, back.days.get(20_000L).sessions);
+        assertTrue(back.days.get(20_000L).morning);
+        assertEquals(Long.valueOf(123L), back.badges.get("first_session"));
+        assertEquals(7, back.fastRunBest);
     }
 
     @Test

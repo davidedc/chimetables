@@ -4,24 +4,33 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * One short session: up to {@code size} cards, due cards first (oldest first), then new cards
- * within the daily cap. A card rated Again comes back {@link #RELEARN_GAP} cards later, at most
- * {@link #MAX_SHOWS} times, after which it simply stays due for the next session.
+ * within the daily cap. A card and its commuted sibling (7x8 / 8x7) are never in the same session,
+ * so the second isn't answered from short-term memory (Anki's "bury siblings").
+ * A card rated Again comes back {@link #RELEARN_GAP} cards later, at most {@link #MAX_SHOWS} times,
+ * after which it simply stays due for the next session.
  */
 public final class Session {
     static final int RELEARN_GAP = 2;
     static final int MAX_SHOWS = 3;
+    /** Sessions with fewer cards than this can't be "perfect". */
+    static final int PERFECT_MIN_CARDS = 3;
 
     private final Deck deck;
     private final Srs srs;
     private final List<Card> queue;
     private final Map<String, Integer> shows = new HashMap<>();
+    private final Map<String, Boolean> firstTry = new HashMap<>();
     private final int planned;
     private int finished;
+    private int answers;
+    private boolean comeback;
 
     private Session(Deck deck, Srs srs, List<Card> picked) {
         this.deck = deck;
@@ -43,9 +52,22 @@ public final class Session {
         }
         Collections.sort(due, Comparator.comparingLong((Card c) -> c.dueAt));
 
-        List<Card> picked = new ArrayList<>(due.subList(0, Math.min(size, due.size())));
+        List<Card> picked = new ArrayList<>();
+        Set<String> taken = new HashSet<>();
+        for (Card c : due) {
+            if (picked.size() >= size) break;
+            if (taken.contains(c.siblingId())) continue;
+            picked.add(c);
+            taken.add(c.id());
+        }
         int newSlots = Math.min(size - picked.size(), deck.newAllowedToday(srs.dayNumber(now), newPerDay));
-        for (int i = 0; i < newSlots && i < fresh.size(); i++) picked.add(fresh.get(i));
+        for (Card c : fresh) {
+            if (newSlots <= 0) break;
+            if (taken.contains(c.siblingId())) continue;
+            picked.add(c);
+            taken.add(c.id());
+            newSlots--;
+        }
         return picked;
     }
 
@@ -70,19 +92,52 @@ public final class Session {
         return planned;
     }
 
-    /** Cards completed so far (for the progress dots). */
+    /** Cards completed so far (for the progress stars). */
     public int finished() {
         return finished;
     }
 
+    public int answers() {
+        return answers;
+    }
+
+    /** Cards answered Good/Easy the first time they came up in this session. */
+    public int firstTryCorrect() {
+        int n = 0;
+        for (boolean ok : firstTry.values()) if (ok) n++;
+        return n;
+    }
+
+    public int firstTryCount() {
+        return firstTry.size();
+    }
+
+    public boolean perfect() {
+        return planned >= PERFECT_MIN_CARDS && isDone() && firstTryCorrect() == planned;
+    }
+
+    /** True if a tricky card stopped being tricky during this session. */
+    public boolean comeback() {
+        return comeback;
+    }
+
     public void answer(Rating rating, long now) {
+        answer(rating, now, -1);
+    }
+
+    public void answer(Rating rating, long now, long revealMs) {
         Card card = queue.remove(0);
         if (card.state == Card.State.NEW) deck.countNewCard(srs.dayNumber(now));
         Integer prev = shows.get(card.id());
         int count = (prev == null ? 0 : prev) + 1;
         shows.put(card.id(), count);
+        if (!firstTry.containsKey(card.id())) firstTry.put(card.id(), rating != Rating.AGAIN);
+        answers++;
+        deck.recordAnswer(rating, revealMs);
 
-        boolean again = srs.answer(card, rating, now);
+        boolean wasTricky = card.tricky;
+        boolean again = srs.answer(card, rating, now, revealMs);
+        if (wasTricky && !card.tricky) comeback = true;
         if (again && count < MAX_SHOWS) {
             queue.add(Math.min(RELEARN_GAP, queue.size()), card);
         } else {

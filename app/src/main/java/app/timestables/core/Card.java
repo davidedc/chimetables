@@ -13,15 +13,19 @@ public final class Card {
     public int intervalDays;
     /** When the card is next due (epoch millis). Unused while NEW. */
     public long dueAt;
-    /** Learning step: 0 = repeat within this session, 1 = repeat later today. */
+    /** Learning step: 0 = repeat within this session, 1 = repeat at a later session today. */
     public int step;
     /** Successful reviews since the card graduated or last lapsed. */
     public int reps;
     public int lapses;
+    /** "Leech": forgotten {@link Srs#LEECH_LAPSES} times; reviewed more often until it sticks. */
+    public boolean tricky;
     /** Total answers, and answers rated Good or Easy (for parent stats). */
     public int seen;
     public int correct;
     public long lastSeenAt;
+    /** Moving average of question-to-reveal time in ms (0 = not measured yet). */
+    public long revealMsAvg;
 
     public Card(int a, int b) {
         this.a = a;
@@ -36,6 +40,11 @@ public final class Card {
         return id(a, b);
     }
 
+    /** The commuted card (8x7 for 7x8); the same id for squares. */
+    public String siblingId() {
+        return id(b, a);
+    }
+
     public static String id(int a, int b) {
         return a + "x" + b;
     }
@@ -44,8 +53,13 @@ public final class Card {
         return state != State.NEW && dueAt <= now;
     }
 
+    public boolean isMastered() {
+        return state == State.REVIEW && intervalDays >= Srs.MASTERED_DAYS;
+    }
+
     @Override
     public String toString() {
-        return id() + "[" + state + " ease=" + ease + " ivl=" + intervalDays + " step=" + step + "]";
+        return id() + "[" + state + " ease=" + Math.round(ease * 100) / 100.0 + " ivl=" + intervalDays
+                + " step=" + step + (tricky ? " tricky" : "") + "]";
     }
 }

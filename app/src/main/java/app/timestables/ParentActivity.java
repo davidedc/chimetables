@@ -88,10 +88,16 @@ public class ParentActivity extends Activity {
         long today = store.srs().dayNumber(now);
         body(st.total + " cards in the selected tables\n"
                 + st.mastered + " mastered (interval ≥ 3 weeks), " + st.learning + " learning, " + st.unseen + " not seen yet\n"
-                + st.due + " due now · new today: " + (deck.newDay == today ? deck.newCount : 0) + "/" + settings.newPerDay + "\n"
+                + st.due + " due now · " + st.tricky + " tricky · new today: " + (deck.newDay == today ? deck.newCount : 0)
+                + "/" + settings.newPerDay + "\n"
                 + st.answers + " answers, " + st.accuracyPercent() + "% Good/Easy\n"
+                + "Streak: " + deck.streak(today) + " day(s) · sessions so far: " + deck.totalSessions() + "\n"
                 + "Next wake-up: " + Alarms.format(store.nextWake()));
         body(hardestCards());
+        body(slowestCards());
+
+        section("Badges (" + deck.badges.size() + ")");
+        body(badgeList(deck));
 
         section("Tables");
         GridLayout grid = new GridLayout(this);
@@ -193,6 +199,35 @@ public class ParentActivity extends Activity {
         row(button("Done", Ui.GREEN, v -> finish()));
     }
 
+    private static String badgeList(Deck deck) {
+        if (deck.badges.isEmpty()) return "None yet.";
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM");
+        StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<String, Long> e : deck.badges.entrySet()) {
+            app.timestables.core.Badges.Badge b = app.timestables.core.Badges.byId(e.getKey());
+            if (b == null) continue;
+            sb.append(b.emoji).append(' ').append(b.title).append(" — ").append(b.description).append(" (")
+                    .append(fmt.format(java.time.Instant.ofEpochMilli(e.getValue()).atZone(java.time.ZoneId.systemDefault())))
+                    .append(")\n");
+        }
+        return sb.toString().trim();
+    }
+
+    /** Slowest to recall on average: right but not yet automatic. */
+    private String slowestCards() {
+        List<app.timestables.core.Card> timed = new ArrayList<>();
+        for (app.timestables.core.Card c : Store.get(this).activeCards()) if (c.revealMsAvg > 0) timed.add(c);
+        if (timed.isEmpty()) return "";
+        Collections.sort(timed, (a, b) -> Long.compare(b.revealMsAvg, a.revealMsAvg));
+        StringBuilder sb = new StringBuilder("Slowest: ");
+        for (int i = 0; i < Math.min(6, timed.size()); i++) {
+            app.timestables.core.Card c = timed.get(i);
+            sb.append(i == 0 ? "" : ", ").append(c.a).append("×").append(c.b)
+                    .append(" (").append(Math.round(c.revealMsAvg / 100.0) / 10.0).append("s)");
+        }
+        return sb.toString();
+    }
+
     private String hardestCards() {
         List<app.timestables.core.Card> seen = new ArrayList<>();
         for (app.timestables.core.Card c : Store.get(this).activeCards()) if (c.seen > 0) seen.add(c);
@@ -202,7 +237,7 @@ public class ParentActivity extends Activity {
         StringBuilder sb = new StringBuilder("Trickiest: ");
         for (int i = 0; i < Math.min(6, seen.size()); i++) {
             app.timestables.core.Card c = seen.get(i);
-            sb.append(i == 0 ? "" : ", ").append(c.a).append("×").append(c.b);
+            sb.append(i == 0 ? "" : ", ").append(c.a).append("×").append(c.b).append(c.tricky ? " 💪" : "");
         }
         return sb.toString();
     }

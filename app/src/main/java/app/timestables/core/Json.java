@@ -29,12 +29,30 @@ public final class Json {
                         .put("lapses", c.lapses)
                         .put("seen", c.seen)
                         .put("correct", c.correct)
-                        .put("last", c.lastSeenAt));
+                        .put("last", c.lastSeenAt)
+                        .put("tricky", c.tricky)
+                        .put("revealMs", c.revealMsAvg));
             }
+            JSONObject days = new JSONObject();
+            for (java.util.Map.Entry<Long, Deck.DayStats> e : deck.days.entrySet()) {
+                Deck.DayStats d = e.getValue();
+                days.put(String.valueOf(e.getKey()), new JSONObject()
+                        .put("sessions", d.sessions)
+                        .put("answers", d.answers)
+                        .put("correct", d.correct)
+                        .put("perfect", d.perfect)
+                        .put("morning", d.morning));
+            }
+            JSONObject badges = new JSONObject();
+            for (java.util.Map.Entry<String, Long> e : deck.badges.entrySet()) badges.put(e.getKey(), e.getValue());
             return new JSONObject()
                     .put("version", VERSION)
                     .put("newDay", deck.newDay)
                     .put("newCount", deck.newCount)
+                    .put("fastRun", deck.fastRun)
+                    .put("fastRunBest", deck.fastRunBest)
+                    .put("days", days)
+                    .put("badges", badges)
                     .put("cards", cards)
                     .toString(1);
         } catch (JSONException e) {
@@ -47,6 +65,29 @@ public final class Json {
         Deck deck = new Deck();
         deck.newDay = root.optLong("newDay");
         deck.newCount = root.optInt("newCount");
+        deck.fastRun = root.optInt("fastRun");
+        deck.fastRunBest = root.optInt("fastRunBest");
+        JSONObject days = root.optJSONObject("days");
+        if (days != null) {
+            for (java.util.Iterator<String> it = days.keys(); it.hasNext(); ) {
+                String key = it.next();
+                JSONObject o = days.getJSONObject(key);
+                Deck.DayStats d = new Deck.DayStats();
+                d.sessions = o.optInt("sessions");
+                d.answers = o.optInt("answers");
+                d.correct = o.optInt("correct");
+                d.perfect = o.optInt("perfect");
+                d.morning = o.optBoolean("morning");
+                deck.days.put(Long.parseLong(key), d);
+            }
+        }
+        JSONObject badges = root.optJSONObject("badges");
+        if (badges != null) {
+            for (java.util.Iterator<String> it = badges.keys(); it.hasNext(); ) {
+                String key = it.next();
+                deck.badges.put(key, badges.getLong(key));
+            }
+        }
         JSONArray cards = root.optJSONArray("cards");
         for (int i = 0; cards != null && i < cards.length(); i++) {
             JSONObject o = cards.getJSONObject(i);
@@ -61,6 +102,8 @@ public final class Json {
             c.seen = o.optInt("seen");
             c.correct = o.optInt("correct");
             c.lastSeenAt = o.optLong("last");
+            c.tricky = o.optBoolean("tricky");
+            c.revealMsAvg = o.optLong("revealMs");
             deck.cards.put(c.id(), c);
         }
         return deck;

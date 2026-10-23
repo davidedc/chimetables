@@ -21,6 +21,20 @@ public final class AppLog {
 
     private AppLog() {}
 
+    /**
+     * Appends one review as a JSON line to reviews.jsonl (same folder as app.log). The full answer
+     * history, kept so a scheduler such as FSRS could later be fitted to this child's own data.
+     */
+    public static synchronized void review(Context context, String jsonLine) {
+        File dir = context.getExternalFilesDir(null);
+        if (dir == null) return;
+        try (FileWriter w = new FileWriter(new File(dir, "reviews.jsonl"), true)) {
+            w.write(jsonLine + "\n");
+        } catch (IOException e) {
+            Log.w(TAG, "review log write failed", e);
+        }
+    }
+
     public static synchronized void log(Context context, String message) {
         Log.i(TAG, message);
         File dir = context.getExternalFilesDir(null);

@@ -16,7 +16,8 @@ public final class Chime {
     private static final int RATE = 22050;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    private static final double C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99, A5 = 880.0, C6 = 1046.5;
+    private static final double C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99, A5 = 880.0, C6 = 1046.5,
+            E6 = 1318.51, G6 = 1567.98;
 
     private Chime() {}
 
@@ -42,6 +43,11 @@ public final class Chime {
 
     public static void done() {
         play(new double[] {G5, A5, C6, 0, C6, G5, C6}, 0.12, 0.6f);
+    }
+
+    /** Celebration: a longer, brighter fanfare. */
+    public static void fanfare() {
+        play(new double[] {C5, E5, G5, C6, 0, G5, C6, 0, E6, G6, E6, C6}, 0.11, 0.7f);
     }
 
     /** Sets the alarm stream to the parent's chosen percentage; returns the index applied. */

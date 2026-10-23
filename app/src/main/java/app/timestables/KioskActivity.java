@@ -16,16 +16,26 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import app.timestables.core.Badges;
 import app.timestables.core.Card;
+import app.timestables.core.Deck;
 import app.timestables.core.PinHasher;
 import app.timestables.core.Rating;
 import app.timestables.core.Session;
 import app.timestables.core.Settings;
+import app.timestables.core.Srs;
+import app.timestables.core.WakePlanner;
+
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The single screen the child sees. Modes:
  * SLEEPING (screen normally off) -> CALLING (alarm woke us: chime every ~2 min until touched)
- * -> QUESTION <-> ANSWER (Again/Good/Easy) -> DONE ("well done", then screen off).
+ * -> QUESTION <-> ANSWER (Again/Good/Easy) -> DONE ("well done" or a confetti celebration with any
+ * new badges, then screen off). Starting needs a full slide, so pocket touches can't.
  * Tapping the top-left corner 7 times opens the PIN prompt for parent mode.
  */
 public class KioskActivity extends Activity {
@@ -35,6 +45,10 @@ public class KioskActivity extends Activity {
     private static final long CORNER_WINDOW_MS = 5000;
     private static final long TAP_GUARD_MS = 450;
     private static final long DONE_SCREEN_MS = 6000;
+    private static final long CELEBRATION_MS = 10_000;
+    /** Share of cards right first time that earns confetti. */
+    private static final int CELEBRATE_PERCENT = 80;
+    private static final int MORNING_BEFORE_HOUR = 9;
     /** A session keeps the screen on until this long after the last touch. */
     private static final long SESSION_IDLE_MS = 3 * 60_000L;
 
@@ -48,6 +62,11 @@ public class KioskActivity extends Activity {
     private int cornerTaps;
     private long firstCornerTap;
     private PowerManager.WakeLock screenLock;
+    private long questionShownAt;
+    private long revealMs = -1;
+    private String doneEmoji;
+    private String doneTitle;
+    private String doneDetail;
 
     private LinearLayout content;
     private TextView topLine;
@@ -57,6 +76,7 @@ public class KioskActivity extends Activity {
     private SlideToStart slider;
     private LinearLayout ratings;
     private TextView footer;
+    private ConfettiView confetti;
 
     private final Runnable beepTask = this::beep;
     private final Runnable giveUpTask = this::giveUp;
@@ -217,15 +237,21 @@ public class KioskActivity extends Activity {
     }
 
     private void reveal() {
+        revealMs = SystemClock.uptimeMillis() - questionShownAt;
         setMode(Mode.ANSWER);
     }
 
     private void rate(Rating rating) {
         if (session == null || session.current() == null) return;
         Card card = session.current();
-        session.answer(rating, System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        session.answer(rating, now, revealMs);
         Store.get(this).saveDeck();
-        AppLog.log(this, "answer " + card.id() + " " + rating + " -> " + card);
+        AppLog.log(this, "answer " + card.id() + " " + rating + " in " + revealMs + "ms -> " + card);
+        AppLog.review(this, "{\"t\":" + now + ",\"card\":\"" + card.id() + "\",\"rating\":\"" + rating
+                + "\",\"grade\":\"" + Srs.grade(rating, revealMs) + "\",\"revealMs\":" + revealMs
+                + ",\"state\":\"" + card.state + "\",\"ivl\":" + card.intervalDays + ",\"ease\":"
+                + Math.round(card.ease * 100) / 100.0 + ",\"lapses\":" + card.lapses + ",\"due\":" + card.dueAt + "}");
         if (rating == Rating.EASY) Chime.easy();
         else if (rating == Rating.GOOD) Chime.good();
         else Chime.again();
@@ -234,10 +260,55 @@ public class KioskActivity extends Activity {
     }
 
     private void finishSession() {
-        AppLog.log(this, "session done: " + (session == null ? 0 : session.finished()) + " cards");
+        boolean celebrate = false;
+        doneEmoji = "🌟";
+        doneTitle = "All done for now!";
+        doneDetail = "";
+        if (session != null && !session.isEmpty()) {
+            Store store = Store.get(this);
+            Deck deck = store.deck();
+            Srs srs = store.srs();
+            long now = System.currentTimeMillis();
+            long today = srs.dayNumber(now);
+            boolean morning = srs.hourOfDay(now) < MORNING_BEFORE_HOUR;
+            deck.recordSession(today, session.answers(), session.firstTryCorrect(), session.perfect(), morning);
+            Badges.SessionResult result = new Badges.SessionResult();
+            result.perfect = session.perfect();
+            result.comeback = session.comeback();
+            result.morning = morning;
+            List<Badges.Badge> earned = Badges.evaluate(deck, store.activeCards(), store.settings(),
+                    wakesPerDay(store.settings()), today, result, now);
+            store.saveDeck();
+
+            boolean great = session.firstTryCorrect() * 100 >= session.planned() * CELEBRATE_PERCENT;
+            celebrate = great || !earned.isEmpty();
+            doneEmoji = session.perfect() ? "🎯" : great ? "🎉" : "🌟";
+            doneTitle = session.perfect() ? "Perfect!" : great ? "Amazing!" : "Well done!";
+            StringBuilder detail = new StringBuilder();
+            for (Badges.Badge b : earned) detail.append("New badge: ").append(b.emoji).append(' ').append(b.title).append('\n');
+            int streak = deck.streak(today);
+            if (streak >= 2) detail.append("🔥 ").append(streak).append(" days in a row!");
+            doneDetail = detail.toString().trim();
+            AppLog.log(this, "session done: " + session.finished() + " cards, " + session.firstTryCorrect() + "/"
+                    + session.planned() + " right first time, perfect=" + session.perfect() + ", streak=" + streak
+                    + ", new badges=" + earned);
+        } else {
+            AppLog.log(this, "session done: nothing to practise");
+        }
         setMode(Mode.DONE);
-        Chime.done();
-        handler.postDelayed(sleepTask, DONE_SCREEN_MS);
+        if (celebrate) {
+            confetti.burst();
+            Chime.fanfare();
+        } else {
+            Chime.done();
+        }
+        handler.postDelayed(sleepTask, celebrate ? CELEBRATION_MS : DONE_SCREEN_MS);
+    }
+
+    private static int wakesPerDay(Settings s) {
+        int n = 0;
+        for (LocalTime t : s.wakeTimes) if (!WakePlanner.isQuiet(t, s.quietStart, s.quietEnd)) n++;
+        return n;
     }
 
     private void goToSleep() {
@@ -245,6 +316,7 @@ public class KioskActivity extends Activity {
         session = null;
         mode = Mode.SLEEPING;
         releaseScreen();
+        confetti.stop();
         render();
         Alarms.scheduleNext(this, "sleep");
         Kiosk.screenOff(this);
@@ -253,6 +325,10 @@ public class KioskActivity extends Activity {
     private void setMode(Mode m) {
         mode = m;
         lastModeChange = SystemClock.uptimeMillis();
+        if (m == Mode.QUESTION) {
+            questionShownAt = lastModeChange;
+            revealMs = -1;
+        }
         render();
     }
 
@@ -319,6 +395,10 @@ public class KioskActivity extends Activity {
         fp.topMargin = Ui.dp(this, 12);
         content.addView(footer, fp);
 
+        confetti = new ConfettiView(this);
+        confetti.setVisibility(View.GONE);
+        root.addView(confetti, new FrameLayout.LayoutParams(-1, -1));
+
         // Tapping the question area also reveals the answer.
         bigText.setOnClickListener(v -> {
             if (mode == Mode.QUESTION && tapAllowed()) reveal();
@@ -357,6 +437,8 @@ public class KioskActivity extends Activity {
         slider.reset();
         ratings.setVisibility(View.GONE);
         footer.setText("");
+        footer.setTextSize(16);
+        footer.setTextColor(night ? Ui.NIGHT_INK : Ui.SOFT_INK);
 
         switch (mode) {
             case SLEEPING: {
@@ -371,6 +453,9 @@ public class KioskActivity extends Activity {
                 slider.setLabel("Slide to play");
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
+                } else {
+                    footer.setTextSize(20);
+                    footer.setText(trophyShelf(store.deck(), store.srs().dayNumber(now)));
                 }
                 break;
             }
@@ -387,6 +472,7 @@ public class KioskActivity extends Activity {
                 Card card = session.current();
                 topLine.setText(progressStars());
                 bigText.setText(card.a + " × " + card.b);
+                if (card.tricky) footer.setText("💪 A tricky one: you can do it!");
                 if (mode == Mode.QUESTION) {
                     subText.setText("= ?");
                     subText.setTextColor(Ui.SOFT_INK);
@@ -401,11 +487,32 @@ public class KioskActivity extends Activity {
             }
             case DONE:
                 topLine.setText(progressStars());
-                bigText.setText("🌟");
-                subText.setText(session == null || session.isEmpty() ? "All done for now!" : "Well done!");
+                bigText.setText(doneEmoji);
+                subText.setText(doneTitle);
+                footer.setTextSize(22);
+                footer.setTextColor(Ui.INK);
+                footer.setText(doneDetail);
                 primary.setText("Bye bye 👋");
                 break;
         }
+    }
+
+    /** Streak and the most recent badges, for the sleeping screen. */
+    private static String trophyShelf(Deck deck, long today) {
+        StringBuilder sb = new StringBuilder();
+        int streak = deck.streak(today);
+        if (streak >= 1) sb.append("🔥 ").append(streak).append(streak == 1 ? " day" : " days in a row");
+        if (!deck.badges.isEmpty()) {
+            List<Map.Entry<String, Long>> earned = new ArrayList<>(deck.badges.entrySet());
+            earned.sort((x, y) -> Long.compare(y.getValue(), x.getValue()));
+            sb.append(sb.length() > 0 ? "\n" : "");
+            for (int i = 0; i < Math.min(8, earned.size()); i++) {
+                Badges.Badge b = Badges.byId(earned.get(i).getKey());
+                if (b != null) sb.append(b.emoji).append(' ');
+            }
+            if (earned.size() > 8) sb.append("+").append(earned.size() - 8);
+        }
+        return sb.toString().trim();
     }
 
     private String progressStars() {

@@ -15,5 +15,6 @@ remote="/sdcard/Android/data/$PKG/files"
 stamp="$(date +%Y%m%d-%H%M%S)"
 adb pull "$remote/app.log" "logs/app-$stamp.log" >/dev/null
 adb pull "$remote/app.log.1" "logs/app-$stamp.log.1" >/dev/null 2>&1 || true
+adb pull "$remote/reviews.jsonl" "logs/reviews-$stamp.jsonl" >/dev/null 2>&1 && echo "Saved logs/reviews-$stamp.jsonl (answer history)" || true
 echo "Saved logs/app-$stamp.log"
 tail -n "${1:-40}" "logs/app-$stamp.log"
