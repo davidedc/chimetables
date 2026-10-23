@@ -230,10 +230,10 @@ public class ParentActivity extends Activity {
 
     private String hardestCards() {
         List<app.timestables.core.Card> seen = new ArrayList<>();
-        for (app.timestables.core.Card c : Store.get(this).activeCards()) if (c.seen > 0) seen.add(c);
-        if (seen.isEmpty()) return "No answers yet.";
-        Collections.sort(seen, (a, b) -> Double.compare(a.ease, b.ease) != 0
-                ? Double.compare(a.ease, b.ease) : Integer.compare(b.lapses, a.lapses));
+        for (app.timestables.core.Card c : Store.get(this).activeCards()) if (c.lapses > 0 || c.tricky) seen.add(c);
+        if (seen.isEmpty()) return "No forgotten cards yet.";
+        Collections.sort(seen, (a, b) -> a.lapses != b.lapses
+                ? Integer.compare(b.lapses, a.lapses) : Double.compare(a.ease, b.ease));
         StringBuilder sb = new StringBuilder("Trickiest: ");
         for (int i = 0; i < Math.min(6, seen.size()); i++) {
             app.timestables.core.Card c = seen.get(i);
@@ -246,6 +246,8 @@ public class ParentActivity extends Activity {
         Store.get(this).saveSettings();
         AppLog.log(this, "parent: exit kiosk for maintenance");
         Maintenance.start(this);
+        // A lock screen hidden behind the kiosk would otherwise appear over Settings.
+        getSystemService(android.app.KeyguardManager.class).requestDismissKeyguard(this, null);
         try {
             startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (RuntimeException e) {

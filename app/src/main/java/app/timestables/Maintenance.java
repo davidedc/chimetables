@@ -35,7 +35,9 @@ public final class Maintenance {
                 .setContentTitle("Kiosk paused for maintenance")
                 .setContentText("Tap to return to Times Tables (automatic at " + Alarms.formatTime(until) + ")")
                 .setOngoing(true)
-                .setContentIntent(endIntent(context, PendingIntent.FLAG_UPDATE_CURRENT))
+                .setContentIntent(PendingIntent.getActivity(context, 11,
+                        new Intent(context, KioskActivity.class).setAction(ACTION_END), PendingIntent.FLAG_UPDATE_CURRENT))
+                .setAutoCancel(true)
                 .build();
         nm.notify(NOTIFICATION_ID, n);
         context.getSystemService(AlarmManager.class)
@@ -44,6 +46,11 @@ public final class Maintenance {
     }
 
     public static void end(Context context) {
+        end(context, true);
+    }
+
+    /** @param bringToFront false when called from the kiosk activity itself */
+    public static void end(Context context, boolean bringToFront) {
         Store.get(context).setMaintenanceUntil(0);
         context.getSystemService(NotificationManager.class).cancel(NOTIFICATION_ID);
         PendingIntent pending = endIntent(context, PendingIntent.FLAG_NO_CREATE);
@@ -53,7 +60,9 @@ public final class Maintenance {
             Kiosk.dpm(context).setStatusBarDisabled(AdminReceiver.component(context), true);
         }
         AppLog.log(context, "maintenance ended");
-        context.startActivity(new Intent(context, KioskActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        if (bringToFront) {
+            context.startActivity(new Intent(context, KioskActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
     }
 
     private static PendingIntent endIntent(Context context, int flags) {

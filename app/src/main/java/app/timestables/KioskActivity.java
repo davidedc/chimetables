@@ -98,7 +98,10 @@ public class KioskActivity extends Activity {
     }
 
     private void handleIntent(Intent intent) {
-        if (intent != null && ACTION_WAKE.equals(intent.getAction())) {
+        if (intent != null && Maintenance.ACTION_END.equals(intent.getAction())) {
+            intent.setAction(null);
+            Maintenance.end(this, false); // onResume then re-enters lock task
+        } else if (intent != null && ACTION_WAKE.equals(intent.getAction())) {
             intent.setAction(null); // don't re-trigger on recreation
             startCalling();
         } else if (mode == Mode.SLEEPING) {
@@ -112,7 +115,7 @@ public class KioskActivity extends Activity {
         hideSystemBars();
         Store store = Store.get(this);
         long now = System.currentTimeMillis();
-        if (store.maintenanceUntil() > 0 && !store.inMaintenance(now)) Maintenance.end(this);
+        if (store.maintenanceUntil() > 0 && !store.inMaintenance(now)) Maintenance.end(this, false);
         if (Kiosk.isDeviceOwner(this) && !store.inMaintenance(now)) {
             Kiosk.allowLockTask(this);
             Kiosk.dpm(this).setStatusBarDisabled(AdminReceiver.component(this), true);
@@ -373,6 +376,12 @@ public class KioskActivity extends Activity {
         subText.setAutoSizeTextTypeUniformWithConfiguration(24, 88, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         content.addView(subText, new LinearLayout.LayoutParams(-1, 0, 2f));
 
+        // Hint / badges / streak line, just above the buttons.
+        footer = Ui.text(this, 16, Ui.SOFT_INK, false);
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, -2);
+        fp.bottomMargin = Ui.dp(this, 4);
+        content.addView(footer, fp);
+
         primary = Ui.button(this, "", Ui.ORANGE, 30);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 96));
         lp.topMargin = Ui.dp(this, 8);
@@ -401,13 +410,9 @@ public class KioskActivity extends Activity {
         rp.topMargin = Ui.dp(this, 8);
         content.addView(ratings, rp);
 
-        footer = Ui.text(this, 16, Ui.SOFT_INK, false);
-        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, -2);
-        fp.topMargin = Ui.dp(this, 12);
-        content.addView(footer, fp);
 
         confetti = new ConfettiView(this);
-        confetti.setVisibility(View.GONE);
+        confetti.setVisibility(View.INVISIBLE);
         root.addView(confetti, new FrameLayout.LayoutParams(-1, -1));
 
         // Tapping the question area also reveals the answer.

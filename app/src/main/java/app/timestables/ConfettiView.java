@@ -51,7 +51,8 @@ final class ConfettiView extends View {
 
     void stop() {
         startedAt = 0;
-        setVisibility(GONE);
+        setVisibility(INVISIBLE); // INVISIBLE, not GONE: keeps its size for the next burst
+        invalidate();
     }
 
     @Override
