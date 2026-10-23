@@ -63,4 +63,6 @@ android {
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
+    // Real org.json for JVM tests (the android.jar copy is a stub there)
+    testImplementation 'org.json:json:20250517'
 }

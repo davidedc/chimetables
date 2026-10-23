@@ -1,0 +1,29 @@
+// Tiny helper for firmware whose "tap Build number 7 times" is hijacked by a vendor factory menu:
+// it opens Android's Developer options page directly so USB debugging can be switched on.
+// Copy the APK to the device over USB file transfer and install it from the Files app.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'app.timestables.devopts'
+    compileSdk = 29
+
+    defaultConfig {
+        applicationId = 'app.timestables.devopts'
+        minSdk = 29
+        targetSdk = 29
+        versionCode = 1
+        versionName = '1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        disable += ['ExpiredTargetSdkVersion', 'OldTargetApi']
+        abortOnError = false
+    }
+}
