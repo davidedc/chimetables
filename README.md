@@ -14,9 +14,12 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 - **Calling:** the screen turns on and a friendly chime plays on the alarm stream, repeating every
   2 minutes up to 5 times. The child **slides** the big slider to start. Taps and pocket brushes
   do nothing, so a session can't start (or be answered) by accident.
-- **Cards:** `7 × 8` in huge text → tap to show `= 56` → **Again / Good / Easy**. Happy sounds only.
-- **End:** "Well done!", or confetti and a fanfare when at least 80% were right first time or a
-  badge was earned. Then the screen goes off.
+- **Cards:** `7 × 8 = ?` in huge text; she **types the answer** on a big keypad (as in the UK
+  Year 4 Multiplication Tables Check). The right number is accepted the moment it's typed; a wrong
+  one shows a gentle "Not 54, let's remember 56!" and the card comes back two cards later.
+  Happy sounds only. There are no self-rating buttons: the app grades her (see the scheduler below).
+- **End:** "Well done!", or confetti, a fanfare and a **sticker** when at least 80% were right first
+  time or a badge was earned. Then the screen goes off.
 - **Sleeping screen** (if the power button is pressed): when the next wake-up is, the current
   streak and recent badges, and "Slide to play" if cards are due.
 
@@ -138,15 +141,19 @@ Implemented from the Anki manual's description of its SM-2 variant (not Anki's A
   the next session the same day; right again → 1 day. Easy → 3 days.
 - **Reviews:** Good → interval × ease (start 2.5), Easy → × ease × 1.3 and ease +0.15, Again → ease
   −0.20, relearn in the session, then 1 day. Overdue cards get credit for the extra days (Anki's rule).
-- **Speed matters:** there is no Hard button; a Good that took **more than 10 s** to reveal counts as
-  Hard (interval × 1.2, ease −0.15, and a learning card doesn't graduate yet). Times tables should be
-  automatic, not worked out. Reveals over 90 s are ignored as distraction. The child never sees this.
+- **Graded automatically** from the typed answer and how long she took to **start** typing (so
+  typing speed doesn't count): wrong → Again; right within 3 s → Easy; right later → Good; right but
+  after **more than 10 s** → Hard (interval × 1.2, ease −0.15, and a learning card doesn't graduate
+  yet). Times tables should be automatic, not worked out. Over 90 s is ignored as distraction.
+  A card missed earlier in the same session can't come back as Easy.
+- A wrong number is marked wrong as soon as it has as many digits as the answer, so she can't keep
+  trying numbers until one is accepted.
 - **Tricky cards:** forgotten 4 times → "tricky" (💪 shown, interval capped at 14 days) until
   remembered at that cap.
 - Intervals capped at **60 days** so facts stay fresh, ±5% fuzz from 7 days so cards spread out,
   and **7×8 and 8×7 never in the same session** (Anki's "bury siblings").
 - Up to 5 new cards a day; due cards come first, so new cards slow down by themselves when reviews pile up.
-- Every answer is appended to `reviews.jsonl` (time, card, rating, reveal time, resulting interval),
+- Every answer is appended to `reviews.jsonl` (time, card, what she typed, grade, response time, interval),
   enough to fit an FSRS model to her own data later if wanted.
 
 Tests: `app/src/test/java/app/timestables/core/` (JVM, run by `build.sh`).
@@ -158,6 +165,19 @@ Tests: `app/src/test/java/app/timestables/core/` (JVM, run by `build.sh`).
 ⚡ 10 quick right answers in a row · 💪 beat a tricky card · 💯/🎖️/👑 100/500/1000 answers ·
 🌓 half mastered · 🌕 everything mastered · 🏅 "7× master" for each table.
 A streak counts days with at least one finished session; it isn't broken until a whole day is missed.
+
+## Stickers
+
+Celebration screens can show a sticker with a line under it. Stickers are personal pictures, so they
+live in **`family-assets/stickers/`, which is git-ignored** and only bundled into your local build:
+
+- put PNG/JPG/WebP files there (about 360 px, transparent background looks best)
+- `family-assets/stickers/phrases.txt` maps each file to its line: `salish_wow.png: Wow!! Amazing!`
+- rebuild and install: `scripts/build.sh release && scripts/install.sh release`
+
+One sticker appears per celebration, preferring ones she hasn't collected yet; the sleeping screen
+shows the collection (🖼️ 3/9). With the folder empty or missing the app uses emoji instead.
+Back this folder up along with `keystore/`.
 
 ## Recovery and unlocking
 
@@ -192,11 +212,13 @@ A streak counts days with at least one finished session; it isn't broken until a
 
 ```
 app/src/main/java/app/timestables/
-  core/            pure Java: Srs (scheduler), Session, Deck, Badges, WakePlanner, Settings, Json, PinHasher
+  core/            pure Java: Srs (scheduler), Answer (grading), Session, Deck, Badges, WakePlanner,
+                   Settings, Json, PinHasher
   KioskActivity    the child's screen          ParentActivity  PIN-protected settings
   Alarms, WakeReceiver, SystemEventsReceiver   wake-ups and rescheduling
   Kiosk, Maintenance, AdminReceiver            device-owner policy
-  CommandReceiver  adb commands for scripts/   Chime, ConfettiView, SlideToStart, PinPad, Ui
+  CommandReceiver  adb commands for scripts/   Stickers, Chime, ConfettiView, SlideToStart, PinPad, Ui
 devopts/           helper APK to open Developer options
+family-assets/     (git-ignored) personal stickers bundled into local builds
 scripts/           build/install/provision/harden/unharden/logs/...
 ```
