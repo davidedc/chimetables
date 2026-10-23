@@ -34,7 +34,7 @@ public final class Badges {
 
     /** Fixed badges, in display order. Table badges ("7x master") are generated per table. */
     public static final List<Badge> FIXED = Arrays.asList(
-            new Badge("first_session", "🌱", "First steps", "Finished your first session"),
+            new Badge("first_session", "🌱", "First steps", "Did your first session"),
             new Badge("streak_3", "🔥", "On a roll", "Practised 3 days in a row"),
             new Badge("streak_7", "📅", "Week warrior", "Practised 7 days in a row"),
             new Badge("streak_14", "🚀", "Unstoppable", "Practised 14 days in a row"),
