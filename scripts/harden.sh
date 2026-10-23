@@ -13,7 +13,7 @@ status="$(app_cmd STATUS)"
 [[ "$status" == *pinSet=true* ]] || die "set the parent PIN first: scripts/set-pin.sh, or tap the top-left corner 7 times on the device"
 
 if [ "${1:-}" != "--yes" ]; then
-    read -r -p "Apply hardening restrictions now? [y/N] " answer
+    read -r -p "Apply hardening restrictions now? [y/N] " answer || answer=""
     [ "$answer" = "y" ] || die "stopped; nothing changed"
 fi
 

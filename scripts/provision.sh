@@ -40,7 +40,7 @@ if ! adb_sh dumpsys device_policy | grep -q "package=$PKG"; then
     echo "The app is not device owner yet. This needs 0 accounts and 1 user on the device:"
     adb_sh dumpsys account | grep -E '^\s*Accounts:' || true
     adb_sh pm list users
-    read -r -p "Set $ADMIN as device owner now? [y/N] " answer
+    read -r -p "Set $ADMIN as device owner now? [y/N] " answer || answer=""
     [ "$answer" = "y" ] || die "stopped; nothing changed"
     adb_sh dpm set-device-owner "$ADMIN"
 fi
@@ -58,7 +58,7 @@ if [ "$KEEP_RADIOS" = 0 ]; then
 fi
 
 echo "== full screen: navigation bar off-screen"
-navbar_h="$(adb_sh dumpsys window windows | grep -A8 'Window{.*NavigationBar0' | sed -n 's/.*Requested w=[0-9]* h=\([0-9]*\).*/\1/p' | head -1)"
+navbar_h="$(adb_sh dumpsys window windows | grep -A8 'Window{.*NavigationBar0' | sed -n 's/.*Requested w=[0-9]* h=\([0-9]*\).*/\1/p' | head -1 || true)"
 [ -n "$navbar_h" ] || navbar_h=63
 adb_sh wm overscan "0,0,0,-$navbar_h"
 

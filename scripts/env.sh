@@ -11,7 +11,7 @@ export JAVA_HOME ANDROID_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
 
 # adb talks to the single connected device unless ANDROID_SERIAL is set.
-adb_sh() { adb shell "$@" | tr -d '\r'; }
+adb_sh() { adb shell "$@" </dev/null | tr -d '\r'; }  # </dev/null: adb shell would eat our stdin
 
 # Send a command to the app's shell-only command receiver (protected by android.permission.DUMP,
 # which adb shell holds and normal apps cannot get) and print the receiver's result line.

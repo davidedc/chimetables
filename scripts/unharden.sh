@@ -22,7 +22,7 @@ done
 
 adb get-state >/dev/null 2>&1 || die "no device: check the cable and that USB debugging is still on"
 if [ "$yes" = 0 ]; then
-    read -r -p "Unlock the device (remove owner: $remove_owner)? [y/N] " answer
+    read -r -p "Unlock the device (remove owner: $remove_owner)? [y/N] " answer || answer=""
     [ "$answer" = "y" ] || die "stopped; nothing changed"
 fi
 
@@ -37,5 +37,5 @@ fi
 
 adb_sh wm overscan reset
 adb_sh cmd package set-home-activity com.android.launcher3/.Launcher >/dev/null || true
-adb_sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null || true
+adb_sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null 2>&1 || true
 echo "device owner now: $(adb_sh dumpsys device_policy | grep -q "package=$PKG" && echo "$PKG" || echo none)"
