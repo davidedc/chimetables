@@ -1,4 +1,4 @@
-# Times Tables kiosk (MECHEN X55)
+# Chimetables
 
 A single-purpose, Tamagotchi-style times-tables flashcard device built from a MECHEN X55
 "MP3 player" (MediaTek MT6750, Android 10, 480×800). The player sleeps, wakes itself at set
@@ -248,3 +248,7 @@ devopts/           helper APK to open Developer options
 family-assets/     (git-ignored) personal stickers bundled into local builds
 scripts/           build/install/provision/harden/unharden/logs/...
 ```
+
+## Licence
+
+[MIT](LICENSE)
