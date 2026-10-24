@@ -18,3 +18,9 @@ adb pull "$remote/app.log.1" "logs/app-$stamp.log.1" >/dev/null 2>&1 || true
 adb pull "$remote/reviews.jsonl" "logs/reviews-$stamp.jsonl" >/dev/null 2>&1 && echo "Saved logs/reviews-$stamp.jsonl (answer history)" || true
 echo "Saved logs/app-$stamp.log"
 tail -n "${1:-40}" "logs/app-$stamp.log"
+echo
+# Things outside the app that can silently stop the wakes (see README, Known limits).
+sd="$(adb_sh getprop persist.sys.auto.sd.time)"
+echo "device: last boot reason=$(adb_sh getprop sys.boot.reason) up=$(adb_sh uptime | sed 's/.*up \([^,]*\),.*/\1/')" \
+     "battery=$(adb_sh dumpsys battery | sed -n 's/^ *level: //p')%" \
+     "vendor auto shutdown=${sd:-unset}$([ "$sd" = 0 ] || echo ' <-- WARNING: phone will power itself off; run scripts/provision.sh')"

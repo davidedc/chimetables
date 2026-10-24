@@ -121,7 +121,7 @@ same key, and a device-owner app can't simply be uninstalled and reinstalled.
 |---|---|
 | `build.sh [debug\|release]` | unit tests + APK. Debug builds are `testOnly` (removable device owner) |
 | `install.sh [debug\|release]` | install/update in place, handles hardened devices, syncs the clock |
-| `provision.sh [--keep-radios]` | device owner (asks), Doze whitelist, DuraSpeed off, Wi-Fi/BT off, nav bar off-screen, DND off, kiosk policies, Europe/London, hides 41 apps, clock |
+| `provision.sh [--keep-radios]` | device owner (asks), Doze whitelist, DuraSpeed + vendor auto shutdown off, Wi-Fi/BT off, nav bar off-screen, DND off, kiosk policies, Europe/London, hides 41 apps, clock |
 | `set-pin.sh` | set or reset the parent PIN (hidden input, stored only as a salted PBKDF2 hash) |
 | `settings.sh [json]` | show or change settings |
 | `harden.sh [--yes]` | restrictions: no factory reset (Settings), safe boot, users, installs/uninstalls, accounts, date/time, Bluetooth, crash dialogs. **USB debugging stays on.** |
@@ -204,6 +204,13 @@ Back this folder up along with `keystore/`.
 - `FLAG_KEEP_SCREEN_ON` is unreliable on this firmware after an alarm wake, so the app holds its own
   screen wake lock while calling (up to ~10.5 min) and during a session (until 3 min after the last touch).
 - No network: the clock drifts slowly and loses a second or so per reboot; every `install.sh` resyncs.
+- **Vendor auto shutdown**: out of the box this firmware powers the phone **off 60 minutes after the
+  screen goes off** whenever no USB cable is attached (a hidden "Auto Shutdown" in Settings,
+  property `persist.sys.auto.sd.time`; skipped while charging over USB or playing music, which is
+  why cabled tests never showed it). That would silently kill every wake after the first. `provision.sh`
+  sets it to `0` (never) and checks it; `scripts/logs.sh` prints it. If the player is ever found off
+  with its charging screen, check `adb shell getprop sys.boot.reason` (`shutdown,shutdown_by_time` =
+  this) and re-run `adb shell setprop persist.sys.auto.sd.time 0`.
 - Vendor firmware: SELinux is **permissive**, the build fingerprint is spoofed, MediaTek DuraSpeed
   (background killer) is turned off and hidden by `provision.sh`, and the vendor factory-test app
   (`com.teksun.factorytest`) is hidden.

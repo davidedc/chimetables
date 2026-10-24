@@ -6,6 +6,8 @@
 # What it does:
 #   - device owner (only if missing, after confirmation; needs no accounts and a single user)
 #   - battery: Doze whitelist, MediaTek DuraSpeed + background power saving off
+#   - vendor "Auto Shutdown" off: this firmware powers the phone off 60 min after the screen goes
+#     off when no USB cable is attached (persist.sys.auto.sd.time), which would kill every wake
 #   - radios: Wi-Fi and Bluetooth off (the app never uses the network)
 #   - display: navigation bar pushed off-screen (wm overscan) so the kiosk is truly full screen
 #   - DND off, so the alarm-stream chime is never silenced
@@ -50,6 +52,11 @@ adb_sh dumpsys deviceidle whitelist "+$PKG"
 adb_sh settings put system setting.duraspeed.enabled 0
 adb_sh settings put global setting.duraspeed.enabled 0
 adb_sh settings put system background_power_saving_enable 0
+# The vendor's AutoShutdownService (in Settings) reads this on every screen-off; "0" = never.
+# adb can set it because SELinux is permissive on this firmware; it survives reboots.
+adb_sh setprop persist.sys.auto.sd.time 0
+[ "$(adb_sh getprop persist.sys.auto.sd.time)" = 0 ] \
+    || die "could not turn off the vendor auto shutdown (persist.sys.auto.sd.time); see README"
 
 if [ "$KEEP_RADIOS" = 0 ]; then
     echo "== radios off"

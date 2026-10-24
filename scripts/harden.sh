@@ -11,6 +11,7 @@ source "$(dirname "$0")/env.sh"
 status="$(app_cmd STATUS)"
 [[ "$status" == *deviceOwner=true* ]] || die "app is not device owner: run scripts/provision.sh first"
 [[ "$status" == *pinSet=true* ]] || die "set the parent PIN first: scripts/set-pin.sh, or tap the top-left corner 7 times on the device"
+[ "$(adb_sh getprop persist.sys.auto.sd.time)" = 0 ] || die "vendor auto shutdown is still on: run scripts/provision.sh first"
 
 if [ "${1:-}" != "--yes" ]; then
     read -r -p "Apply hardening restrictions now? [y/N] " answer || answer=""
