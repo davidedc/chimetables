@@ -36,6 +36,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * The single screen the child sees. Modes:
@@ -43,6 +44,8 @@ import java.util.Map;
  * start) -> QUESTION (she types the answer on a keypad) -> FEEDBACK (right, or the correct answer)
  * -> ... -> DONE ("well done", or confetti + a sticker + any new badges), then screen off.
  * Answers are graded automatically from correctness and recall speed (see {@link Answer}).
+ * Outside quiet hours she can also wake the screen and slide to play: a normal session if anything
+ * is due, otherwise a bonus round that doesn't change the schedule or earn rewards.
  * Tapping the top-left corner 7 times opens the PIN prompt for parent mode.
  */
 public class KioskActivity extends Activity {
@@ -63,7 +66,11 @@ public class KioskActivity extends Activity {
 
     private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE }
 
+    /** What sliding on the sleeping screen starts. */
+    private enum Play { NOTHING, SESSION, BONUS }
+
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Random random = new Random();
     private Mode mode = Mode.SLEEPING;
     private Session session;
     private int beepsPlayed;
@@ -159,7 +166,8 @@ public class KioskActivity extends Activity {
         // The screen went off mid-call or mid-session (power button, or the child walked away and
         // the idle timeout ran out). Progress is saved per answer, so just go back to sleep.
         AppLog.log(this, "screen off during " + mode + (mode == Mode.CALLING ? " after " + beepsPlayed + " beeps" : ""));
-        if ((mode == Mode.QUESTION || mode == Mode.FEEDBACK) && session != null && session.answers() > 0) {
+        if ((mode == Mode.QUESTION || mode == Mode.FEEDBACK) && session != null && session.answers() > 0
+                && !session.isBonus()) {
             recordSession(); // a partly done session still counts for the streak
         }
         stopCalling();
@@ -247,14 +255,16 @@ public class KioskActivity extends Activity {
 
     // ---------------------------------------------------------------- session
 
-    private void startSession() {
+    private void startSession(boolean bonus) {
         stopCalling();
         Store store = Store.get(this);
         Settings s = store.settings();
-        session = Session.plan(store.deck(), store.srs(), store.activeCards(), s.sessionSize, s.newPerDay,
-                System.currentTimeMillis());
+        session = bonus
+                ? Session.bonus(store.deck(), store.srs(), store.activeCards(), s.sessionSize, random)
+                : Session.plan(store.deck(), store.srs(), store.activeCards(), s.sessionSize, s.newPerDay,
+                        System.currentTimeMillis());
         holdScreen(SESSION_IDLE_MS);
-        AppLog.log(this, "session start: " + session.planned() + " cards");
+        AppLog.log(this, (bonus ? "bonus round start: " : "session start: ") + session.planned() + " cards");
         if (session.isEmpty()) {
             finishSession();
             return;
@@ -294,13 +304,15 @@ public class KioskActivity extends Activity {
         long totalMs = SystemClock.uptimeMillis() - questionShownAt;
         Rating rating = session.answer(Answer.rate(right, firstKeyMs), now, firstKeyMs);
         Store.get(this).saveDeck();
-        AppLog.log(this, "answer " + card.id() + " typed " + typed + (right ? " right" : " wrong") + " first key "
-                + firstKeyMs + "ms total " + totalMs + "ms -> " + rating + " " + card);
+        AppLog.log(this, (session.isBonus() ? "bonus answer " : "answer ") + card.id() + " typed " + typed
+                + (right ? " right" : " wrong") + " first key " + firstKeyMs + "ms total " + totalMs + "ms -> " + rating
+                + " " + card);
         AppLog.review(this, "{\"t\":" + now + ",\"card\":\"" + card.id() + "\",\"typed\":\"" + typed
                 + "\",\"right\":" + right + ",\"rating\":\"" + rating + "\",\"grade\":\"" + Srs.grade(rating, firstKeyMs)
                 + "\",\"firstKeyMs\":" + firstKeyMs + ",\"totalMs\":" + totalMs + ",\"state\":\"" + card.state
                 + "\",\"ivl\":" + card.intervalDays + ",\"ease\":" + Math.round(card.ease * 100) / 100.0
-                + ",\"lapses\":" + card.lapses + ",\"due\":" + card.dueAt + "}");
+                + ",\"lapses\":" + card.lapses + ",\"due\":" + card.dueAt
+                + (session.isBonus() ? ",\"bonus\":true" : "") + "}");
         if (!right) Chime.again();
         else if (rating == Rating.EASY) Chime.easy();
         else Chime.good();
@@ -324,7 +336,14 @@ public class KioskActivity extends Activity {
         doneTitle = "All done for now!";
         doneDetail = "";
         doneSticker = null;
-        if (session != null && !session.isEmpty()) {
+        if (session != null && session.isBonus()) {
+            // Practice only: no streak, badges or stickers, but confetti for a great round.
+            celebrate = session.firstTryCorrect() * 100 >= session.planned() * CELEBRATE_PERCENT;
+            doneEmoji = celebrate ? "🎉" : "⭐";
+            doneTitle = celebrate ? "Amazing bonus!" : "Bonus done!";
+            AppLog.log(this, "bonus round done: " + session.firstTryCorrect() + "/" + session.planned()
+                    + " right first time");
+        } else if (session != null && !session.isEmpty()) {
             List<Badges.Badge> earned = recordSession();
             Store store = Store.get(this);
             Deck deck = store.deck();
@@ -468,7 +487,14 @@ public class KioskActivity extends Activity {
         // Starting a session needs a deliberate slide, so pocket touches can't start one.
         slider = new SlideToStart(this);
         slider.setListener(() -> {
-            if (mode == Mode.CALLING || mode == Mode.SLEEPING) startSession();
+            if (mode == Mode.CALLING) {
+                startSession(false);
+            } else if (mode == Mode.SLEEPING) {
+                // Decide again now: the screen may have been on since quiet hours began.
+                Play play = playOffered(Store.get(this), System.currentTimeMillis());
+                if (play == Play.NOTHING) render();
+                else startSession(play == Play.BONUS);
+            }
         });
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 88));
         sp.topMargin = Ui.dp(this, 6);
@@ -531,10 +557,9 @@ public class KioskActivity extends Activity {
                 bigText.setText("😴");
                 long next = store.nextWake();
                 subText.setText(next > 0 ? "Zzz… see you at " + Alarms.formatTime(next) : "Zzz…");
-                Settings s = store.settings();
-                boolean due = !Session.nothingToDo(store.deck(), store.srs(), store.activeCards(), s.newPerDay, now);
-                slider.setVisibility(due ? View.VISIBLE : View.GONE);
-                slider.setLabel("Slide to play");
+                Play play = playOffered(store, now);
+                slider.setVisibility(play == Play.NOTHING ? View.GONE : View.VISIBLE);
+                slider.setLabel(play == Play.BONUS ? "Bonus round ⭐" : "Slide to play");
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
                 } else {
@@ -558,6 +583,7 @@ public class KioskActivity extends Activity {
                 subText.setTextColor(typed.length() == 0 ? Ui.SOFT_INK : Ui.INK);
                 reserveFeedbackLines();
                 if (card.tricky) footer.setText("💪 A tricky one: you can do it!");
+                else if (session.isBonus()) footer.setText("⭐ Bonus round");
                 keypad.setVisibility(View.VISIBLE);
                 break;
             }
@@ -593,6 +619,15 @@ public class KioskActivity extends Activity {
                 primary.setText("Bye bye 👋");
                 break;
         }
+    }
+
+    /** Nothing during quiet hours; otherwise a session if anything is due, else a bonus round. */
+    private static Play playOffered(Store store, long now) {
+        Settings s = store.settings();
+        if (WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd)) return Play.NOTHING;
+        List<Card> active = store.activeCards();
+        if (!Session.nothingToDo(store.deck(), store.srs(), active, s.newPerDay, now)) return Play.SESSION;
+        return Session.bonusAvailable(active) ? Play.BONUS : Play.NOTHING;
     }
 
     /**

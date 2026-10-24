@@ -204,4 +204,75 @@ public class SessionTest {
         assertEquals(0, deck.fastRun);
         assertEquals(2, deck.fastRunBest);
     }
+
+    Session bonus(Deck deck, int size) {
+        return Session.bonus(deck, srs, deck.active(settings.tables, settings.maxFactor), size, null);
+    }
+
+    @Test
+    public void noBonusRoundBeforeAnyCardHasBeenSeen() {
+        Deck deck = new Deck();
+        assertFalse(Session.bonusAvailable(deck.active(settings.tables, settings.maxFactor)));
+        assertTrue(bonus(deck, 5).isEmpty());
+    }
+
+    @Test
+    public void bonusRoundLeavesScheduleCountersAndRunsAlone() {
+        Deck deck = new Deck();
+        List<String> morning = playAll(plan(deck, at("2026-10-20T07:45")), Rating.GOOD, at("2026-10-20T07:46"));
+        long eight = at("2026-10-20T08:00");
+        List<Card> active = deck.active(settings.tables, settings.maxFactor);
+        assertTrue(Session.nothingToDo(deck, srs, active, settings.newPerDay, eight));
+        assertTrue(Session.bonusAvailable(active));
+
+        List<String> before = new ArrayList<>();
+        for (String id : morning) {
+            Card c = deck.cards.get(id);
+            before.add(c + " due=" + c.dueAt + " seen=" + c.seen + " correct=" + c.correct + " avg=" + c.revealMsAvg);
+        }
+        int newCount = deck.newCount;
+
+        Session b = bonus(deck, 5);
+        assertTrue(b.isBonus());
+        assertEquals(5, b.planned());
+        b.answer(Rating.AGAIN, eight, 4_000);
+        b.answer(Rating.EASY, eight, 1_000);
+        b.answer(Rating.EASY, eight, 1_000);
+        List<String> rest = playAll(b, Rating.EASY, eight);
+        assertEquals(3, rest.size()); // the missed card came back once, plus the two still waiting
+        assertTrue(b.isDone());
+        assertEquals(4, b.firstTryCorrect());
+
+        List<String> after = new ArrayList<>();
+        for (String id : morning) {
+            Card c = deck.cards.get(id);
+            after.add(c + " due=" + c.dueAt + " seen=" + c.seen + " correct=" + c.correct + " avg=" + c.revealMsAvg);
+        }
+        assertEquals(before, after);
+        assertEquals(newCount, deck.newCount);
+        assertEquals(0, deck.fastRun);
+        assertTrue(Session.nothingToDo(deck, srs, active, settings.newPerDay, eight));
+    }
+
+    @Test
+    public void bonusRoundPrefersTheLeastEstablishedCardsAndSkipsSiblings() {
+        Deck deck = new Deck();
+        long now = at("2026-10-22T07:45");
+        for (Card c : deck.active(settings.tables, settings.maxFactor)) {
+            int ivl;
+            switch (c.id()) {
+                case "9x9": ivl = 30; c.tricky = true; break;
+                case "7x8": ivl = 2; break;
+                case "8x7": ivl = 2; break;
+                case "6x6": ivl = 5; break;
+                case "3x3": ivl = 40; break;
+                default: continue;
+            }
+            c.state = Card.State.REVIEW;
+            c.intervalDays = ivl;
+            c.dueAt = now + 86_400_000L;
+        }
+        List<String> shown = playAll(bonus(deck, 3), Rating.GOOD, now);
+        assertEquals(java.util.Arrays.asList("9x9", "7x8", "6x6"), shown);
+    }
 }

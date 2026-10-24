@@ -9,8 +9,9 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 
 ## How it behaves
 
-- **Wake-ups** at 07:45, 12:30, 16:00 and 18:00, never in quiet hours (19:30–07:00). A wake is
-  skipped if nothing is due and no new card is allowed today.
+- **Wake-ups** at 07:45, 12:30, 16:00 and 18:00 by default (her player: 08:30 instead of 07:45),
+  never in quiet hours (19:30–07:00). A wake is skipped if nothing is due and no new card is
+  allowed today.
 - **Calling:** the screen turns on and a friendly chime plays on the alarm stream, repeating every
   2 minutes up to 5 times. The child **slides** the big slider to start. Taps and pocket brushes
   do nothing, so a session can't start (or be answered) by accident.
@@ -21,7 +22,13 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 - **End:** "Well done!", or confetti, a fanfare and a **sticker** when at least 80% were right first
   time or a badge was earned. Then the screen goes off.
 - **Sleeping screen** (if the power button is pressed): when the next wake-up is, the current
-  streak and recent badges, and "Slide to play" if cards are due.
+  streak and recent badges, and "Slide to play" if cards are due. Playing early uses the same due
+  cards and daily new-card allowance, so a later wake-up just finds less to do (or stays silent).
+- **Bonus round:** when nothing is due, the slider offers a bonus round instead: up to 5 cards she
+  has already met, drawn at random from the least established ones. It is practice only: the
+  schedule, streak, badges and stickers are untouched (confetti for a great round, nothing to
+  collect), and `reviews.jsonl` marks those answers `"bonus":true`.
+- **Quiet hours** (19:30–07:00) also block playing by hand: no slider at all, just "Zzz…".
 
 ## Status: what was verified on the real device
 
@@ -152,7 +159,8 @@ Implemented from the Anki manual's description of its SM-2 variant (not Anki's A
   remembered at that cap.
 - Intervals capped at **60 days** so facts stay fresh, ±5% fuzz from 7 days so cards spread out,
   and **7×8 and 8×7 never in the same session** (Anki's "bury siblings").
-- Up to 5 new cards a day; due cards come first, so new cards slow down by themselves when reviews pile up.
+- Up to 5 new cards a day by default (15 on her player, so all 121 are met in about 9 days and known
+  facts quickly move out to 3+ days); due cards come first, so new cards slow down by themselves when reviews pile up.
 - Every answer is appended to `reviews.jsonl` (time, card, what she typed, grade, response time, interval),
   enough to fit an FSRS model to her own data later if wanted.
 
