@@ -7,6 +7,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -518,6 +521,8 @@ public class KioskActivity extends Activity {
         keypad.setAlpha(1f);
         footer.setText("");
         footer.setTextSize(16);
+        footer.setMinLines(0);
+        footer.setMaxLines(Integer.MAX_VALUE);
         footer.setTextColor(night ? Ui.NIGHT_INK : Ui.SOFT_INK);
 
         switch (mode) {
@@ -551,6 +556,7 @@ public class KioskActivity extends Activity {
                 bigText.setText(card.a + " × " + card.b);
                 subText.setText("= " + (typed.length() == 0 ? "?" : typed));
                 subText.setTextColor(typed.length() == 0 ? Ui.SOFT_INK : Ui.INK);
+                reserveFeedbackLines();
                 if (card.tricky) footer.setText("💪 A tricky one: you can do it!");
                 keypad.setVisibility(View.VISIBLE);
                 break;
@@ -560,8 +566,8 @@ public class KioskActivity extends Activity {
                 bigText.setText(feedbackCard.a + " × " + feedbackCard.b);
                 subText.setText("= " + feedbackCard.answer() + (feedbackRight ? " ✓" : ""));
                 subText.setTextColor(Ui.GREEN);
+                reserveFeedbackLines();
                 if (!feedbackRight) {
-                    footer.setTextSize(20);
                     footer.setTextColor(Ui.INK);
                     footer.setText("Not " + feedbackTyped + " — let's remember " + feedbackCard.answer() + "!");
                 }
@@ -589,13 +595,23 @@ public class KioskActivity extends Activity {
         }
     }
 
+    /**
+     * Gives the footer the same two-line height on the question and feedback screens, so the
+     * "let's remember" line doesn't shrink and shift the sum when it appears.
+     */
+    private void reserveFeedbackLines() {
+        footer.setTextSize(20);
+        footer.setLines(2);
+    }
+
     /** Streak, recent badges and the sticker collection, for the sleeping screen. */
     private static String trophyShelf(Deck deck, long today, int stickersAvailable) {
         StringBuilder sb = new StringBuilder();
         int streak = deck.streak(today);
         if (streak >= 1) sb.append("🔥 ").append(streak).append(streak == 1 ? " day" : " days in a row");
         if (stickersAvailable > 0 && !deck.stickers.isEmpty()) {
-            sb.append(sb.length() > 0 ? "  ·  " : "").append("🖼️ ").append(deck.stickers.size()).append('/').append(stickersAvailable);
+            sb.append(sb.length() > 0 ? "  ·  " : "").append("🖼️ ").append(deck.stickers.size()).append(" of ")
+                    .append(stickersAvailable).append(" stickers");
         }
         if (!deck.badges.isEmpty()) {
             List<Map.Entry<String, Long>> earned = new ArrayList<>(deck.badges.entrySet());
@@ -610,11 +626,17 @@ public class KioskActivity extends Activity {
         return sb.toString().trim();
     }
 
-    private String progressStars() {
-        if (session == null) return "";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < session.planned(); i++) sb.append(i < session.finished() ? "★" : "☆");
-        return sb.toString();
+    /** One star per card in this session: gold once done, faint until then. Hidden for a single card. */
+    private CharSequence progressStars() {
+        if (session == null || session.planned() < 2) return "";
+        SpannableStringBuilder sb = new SpannableStringBuilder();
+        for (int i = 0; i < session.planned(); i++) {
+            boolean done = i < session.finished();
+            int start = sb.length();
+            sb.append(done ? "★" : "☆");
+            sb.setSpan(new ForegroundColorSpan(done ? Ui.GOLD : Ui.FAINT), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return sb;
     }
 
     // ---------------------------------------------------------------- parent corner

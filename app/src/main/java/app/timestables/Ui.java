@@ -20,6 +20,7 @@ final class Ui {
     static final int GREEN = Color.parseColor("#43A047");
     static final int BLUE = Color.parseColor("#42A5F5");
     static final int GOLD = Color.parseColor("#FFB300");
+    static final int FAINT = Color.parseColor("#E3D3C2");
     static final int NIGHT = Color.parseColor("#1D2340");
     static final int NIGHT_INK = Color.parseColor("#C9D1FF");
 
@@ -50,7 +51,10 @@ final class Ui {
         shape.setColor(color);
         shape.setCornerRadius(dp(c, 24));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), shape, null));
-        b.setPadding(dp(c, 8), dp(c, 8), dp(c, 8), dp(c, 8));
+        // No vertical padding or font padding: otherwise a big label in a short button is taller
+        // than the space inside it, and Android pins it to the top so it hangs low.
+        b.setIncludeFontPadding(false);
+        b.setPadding(dp(c, 8), 0, dp(c, 8), 0);
         return b;
     }
 }
