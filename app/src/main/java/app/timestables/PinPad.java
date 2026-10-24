@@ -9,6 +9,9 @@ import android.widget.Button;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import app.timestables.core.PinHasher;
 
 /** Self-contained numeric PIN dialog, so parent mode needs no system keyboard. */
 final class PinPad {
@@ -74,5 +77,22 @@ final class PinPad {
         dialog.setContentView(root);
         dialog.getWindow().setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         dialog.show();
+    }
+
+    /** Asks for a new PIN twice; calls back only with a valid PIN typed the same both times. */
+    static void choose(Activity activity, String title, Listener listener) {
+        show(activity, title, pin -> {
+            if (!PinHasher.isValidPin(pin)) {
+                Toast.makeText(activity, "PIN must be 4-8 digits", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            show(activity, "Type the same PIN again", again -> {
+                if (!again.equals(pin)) {
+                    Toast.makeText(activity, "The PINs didn't match. Nothing changed.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                listener.onPin(pin);
+            });
+        });
     }
 }

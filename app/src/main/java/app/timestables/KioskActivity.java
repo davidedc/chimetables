@@ -653,17 +653,13 @@ public class KioskActivity extends Activity {
             return;
         }
         final boolean firstTime = store.pinHash() == null;
-        PinPad.show(this, firstTime ? "Choose a parent PIN (4-8 digits)" : "Parent PIN",
-                pin -> checkPin(pin, firstTime));
+        if (firstTime) PinPad.choose(this, "Choose a parent PIN (4-8 digits)", pin -> checkPin(pin, true));
+        else PinPad.show(this, "Parent PIN", pin -> checkPin(pin, false));
     }
 
     private void checkPin(String pin, boolean firstTime) {
         Store store = Store.get(this);
         if (firstTime) {
-            if (!PinHasher.isValidPin(pin)) {
-                Toast.makeText(this, "PIN must be 4-8 digits", Toast.LENGTH_SHORT).show();
-                return;
-            }
             store.setPinHash(PinHasher.hash(pin));
             AppLog.log(this, "parent PIN set on device");
         } else {

@@ -258,11 +258,7 @@ public class ParentActivity extends Activity {
     }
 
     private void changePin() {
-        PinPad.show(this, "New PIN (4-8 digits)", pin -> {
-            if (!PinHasher.isValidPin(pin)) {
-                toast("PIN must be 4-8 digits");
-                return;
-            }
+        PinPad.choose(this, "New PIN (4-8 digits)", pin -> {
             Store.get(this).setPinHash(PinHasher.hash(pin));
             AppLog.log(this, "parent PIN changed");
             toast("PIN changed");
