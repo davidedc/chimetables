@@ -21,7 +21,7 @@ import java.util.Set;
 /**
  * Optional celebration stickers from the APK's assets/stickers/ folder, which the build fills from
  * the git-ignored family-assets/stickers/ (personal photos never go into the repository). Lines in
- * stickers/phrases.txt map a file to what is shown under it: {@code salish_wow.png: Wow!! Amazing!}.
+ * stickers/phrases.txt map a file to what is shown under it: {@code wow.png: Wow!! Amazing!}.
  * With no stickers the celebration uses emoji.
  */
 final class Stickers {

@@ -4,7 +4,7 @@
 #   - drops the kiosk as permanent HOME, leaves lock task, re-enables status bar and lock screen
 #   - puts the navigation bar back on screen, makes Launcher3 the home app again
 #   - removes the app as device owner (unless --keep-owner)
-# Your daughter's progress is kept (it lives in the app's private storage).
+# The child's progress is kept (it lives in the app's private storage).
 # To install an app update you do NOT need this: scripts/install.sh handles a hardened device.
 # Usage: scripts/unharden.sh [--keep-owner] [--yes]
 set -euo pipefail

@@ -7,9 +7,17 @@ screen off and schedules the next wake-up. It is locked to this one app.
 
 Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 
+## Documentation
+
+- [Device setup](docs/device-setup.md): from the box to a locked kiosk, including Developer
+  options and USB debugging on the X55 (and the menu **not** to tap)
+- [How it works](docs/how-it-works.md): the wake-up chain, kiosk lock-down, data, test results
+- [Learning design](docs/learning-design.md): session sizes, grading, bonus rounds, and the
+  research behind them
+
 ## How it behaves
 
-- **Wake-ups** at 07:45, 12:30, 16:00 and 18:00 by default (her player: 08:30 instead of 07:45),
+- **Wake-ups** at 07:45, 12:30, 16:00 and 18:00 by default (ours: 08:30 instead of 07:45),
   never in quiet hours (19:30–07:00). A wake is skipped if nothing is due and no new card is
   allowed today.
 - **Calling:** the screen turns on and a friendly chime plays on the alarm stream, repeating every
@@ -37,11 +45,14 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 | G1 sideload | PASS | `adb install` of the hello build, screenshot |
 | G2 device owner | PASS | `dpm set-device-owner` with 0 accounts / 1 user, no reset needed |
 | G3 lock task | PASS | Home, Back, Recents, shade, assist blocked (adb + by hand); power long-press shows no menu (by hand); no lock screen after power off/on; safe boot: entered without the restriction, blocked with `DISALLOW_SAFE_BOOT` (Volume Down held during boot) |
-| G4 autonomous wake | PASS (short tests) | `setAlarmClock` and `setExactAndAllowWhileIdle` both fired on time from screen-off, in forced deep Doze, and after the process was killed; screen on, chime heard, repeat chime heard. Overnight run on battery: see below |
+| G4 autonomous wake | PASS | `setAlarmClock` and `setExactAndAllowWhileIdle` both fired on time from screen-off, in forced deep Doze, and after the process was killed; screen on, chime heard, repeat chime heard. **Unplugged for 4.5 h:** the 12:30 wake fired 1 s late after 2 h with the screen off, chimed 5 times, went back to sleep; no shutdown (after fixing the vendor auto shutdown, see Known limits) |
 | G5 reboot | PASS | boots straight into the kiosk (HOME, lock task), `BOOT_COMPLETED` received, 07:45 alarm re-armed |
 | G6 time | PASS (option A) | Europe/London; no network, so auto time is off and the clock is set from the Mac (≈0.1 s) |
 
 ## Setting up from scratch
+
+The full walkthrough, with troubleshooting, is in [docs/device-setup.md](docs/device-setup.md).
+The short version:
 
 ### 1. Mac toolchain (Apple Silicon, Homebrew)
 
@@ -159,7 +170,7 @@ Implemented from the Anki manual's description of its SM-2 variant (not Anki's A
   remembered at that cap.
 - Intervals capped at **60 days** so facts stay fresh, ±5% fuzz from 7 days so cards spread out,
   and **7×8 and 8×7 never in the same session** (Anki's "bury siblings").
-- Up to 5 new cards a day by default (15 on her player, so all 121 are met in about 9 days and known
+- Up to 5 new cards a day by default (15 on ours, so all 121 are met in about 9 days and known
   facts quickly move out to 3+ days); due cards come first, so new cards slow down by themselves when reviews pile up.
 - Every answer is appended to `reviews.jsonl` (time, card, what she typed, grade, response time, interval),
   enough to fit an FSRS model to her own data later if wanted.
@@ -180,7 +191,7 @@ Celebration screens can show a sticker with a line under it. Stickers are person
 live in **`family-assets/stickers/`, which is git-ignored** and only bundled into your local build:
 
 - put PNG/JPG/WebP files there (about 360 px, transparent background looks best)
-- `family-assets/stickers/phrases.txt` maps each file to its line: `salish_wow.png: Wow!! Amazing!`
+- `family-assets/stickers/phrases.txt` maps each file to its line: `wow.png: Wow!! Amazing!`
 - rebuild and install: `scripts/build.sh release && scripts/install.sh release`
 
 One sticker appears per celebration, preferring ones she hasn't collected yet; the sleeping screen
