@@ -29,7 +29,7 @@ out="$(adb install -r -t "$apk" 2>&1 || true)"
 echo "$out"
 case "$out" in
     *Success*) ;;
-    *USER_RESTRICTED*) die "installs are blocked by a user restriction; try scripts/unharden.sh --keep-owner" ;;
+    *USER_RESTRICTED*|*"User restriction"*) die "installs are blocked by a user restriction; try scripts/unharden.sh --keep-owner" ;;
     *) die "install failed" ;;
 esac
 
