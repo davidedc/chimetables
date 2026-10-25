@@ -45,9 +45,9 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 | G1 sideload | PASS | `adb install` of the hello build, screenshot |
 | G2 device owner | PASS | `dpm set-device-owner` with 0 accounts / 1 user, no reset needed |
 | G3 lock task | PASS | Home, Back, Recents, shade, assist blocked (adb + by hand); power long-press shows no menu (by hand); no lock screen after power off/on; safe boot: entered without the restriction, blocked with `DISALLOW_SAFE_BOOT` (Volume Down held during boot) |
-| G4 autonomous wake | PASS | `setAlarmClock` and `setExactAndAllowWhileIdle` both fired on time from screen-off, in forced deep Doze, and after the process was killed; screen on, chime heard, repeat chime heard. **Unplugged for 4.5 h:** the 12:30 wake fired 1 s late after 2 h with the screen off, chimed 5 times, went back to sleep; no shutdown (after fixing the vendor auto shutdown, see Known limits) |
+| G4 autonomous wake | PASS | `setAlarmClock` and `setExactAndAllowWhileIdle` both fired on time from screen-off, in forced deep Doze, and after the process was killed; screen on, chime heard, repeat chime heard. **Unplugged for 4.5 h:** the 12:30 wake fired 1 s late after 2 h with the screen off, chimed 5 times, went back to sleep; no shutdown (after fixing the vendor auto shutdown, see Known limits). **Unplugged 18¾ h overnight:** 18:00 and 08:30 fired 1 s late, silent in quiet hours, 18% battery used including a lot of play |
 | G5 reboot | PASS | boots straight into the kiosk (HOME, lock task), `BOOT_COMPLETED` received, 07:45 alarm re-armed |
-| G6 time | PASS (option A) | Europe/London; no network, so auto time is off and the clock is set from the Mac (≈0.1 s) |
+| G6 time | PASS (option A) | Europe/London; no network, so auto time is off and the clock is set from the Mac (≈0.1 s, drifts ≈1 s a day); summer/winter time changes happen by themselves (verified 25 Oct 2026) |
 
 ## Setting up from scratch
 

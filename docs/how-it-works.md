@@ -88,9 +88,9 @@ App updates keep everything. Unhardening keeps everything. A factory reset loses
 | G1 sideload | PASS | `adb install` |
 | G2 device owner | PASS | `dpm set-device-owner` with 0 accounts and 1 user; no reset needed |
 | G3 lock task | PASS | Home, Back, Recents, shade, assistant blocked; power long-press shows no menu; no lock screen after power off and on; safe mode blocked by `DISALLOW_SAFE_BOOT` |
-| G4 autonomous wake | PASS | short tests from screen-off, in forced deep Doze and with the process killed; **unplugged for 4.5 hours**, the 12:30 wake fired 1 s late after 2 hours with the screen off, chimed 5 times and went back to sleep |
+| G4 autonomous wake | PASS | short tests from screen-off, in forced deep Doze and with the process killed; **unplugged for 4.5 hours**, the 12:30 wake fired 1 s late after 2 hours with the screen off, chimed 5 times and went back to sleep; **unplugged for 18¾ hours overnight**, 16:00 correctly stayed asleep (nothing due), 18:00 and 08:30 fired 1 s late, silent through quiet hours, no shutdown |
 | G5 reboot | PASS | boots straight into the kiosk, lock task on, alarm re-armed |
-| G6 time | PASS | no network, so auto time is off and the clock is set from the Mac to within about 0.1 s |
+| G6 time | PASS | no network, so auto time is off and the clock is set from the Mac to within about 0.1 s (it drifted about 1 s in 18 hours); the switch from summer to winter time (25 Oct 2026) happened by itself, and the 08:30 wake set the evening before fired at 08:30 GMT |
 
 The unplugged test is the one that matters most. The first overnight run failed because of the vendor
 auto shutdown (see [device setup](device-setup.md#7-provision-device-owner-and-kiosk)), which no
