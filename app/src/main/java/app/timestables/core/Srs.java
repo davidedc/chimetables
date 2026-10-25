@@ -92,6 +92,7 @@ public final class Srs {
         card.seen++;
         card.lastSeenAt = now;
         if (rating != Rating.AGAIN) card.correct++;
+        else card.missedAt = now;
         if (revealMs > 0 && revealMs <= DISTRACTED_REVEAL_MS) {
             card.revealMsAvg = card.revealMsAvg == 0 ? revealMs : (card.revealMsAvg * 2 + revealMs) / 3;
         }
@@ -214,6 +215,11 @@ public final class Srs {
                 .atStartOfDay(zone)
                 .toInstant()
                 .toEpochMilli();
+    }
+
+    /** True if the card was answered wrong earlier on the same local day as {@code now}. */
+    public boolean missedToday(Card card, long now) {
+        return card.missedAt > 0 && dayNumber(card.missedAt) == dayNumber(now);
     }
 
     /** Local calendar day number of {@code now}. */

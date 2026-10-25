@@ -15,7 +15,8 @@ import java.util.Set;
  * within the daily cap. A card and its commuted sibling (7x8 / 8x7) are never in the same session,
  * so the second isn't answered from short-term memory (Anki's "bury siblings").
  * A card rated Again comes back {@link #RELEARN_GAP} cards later, at most {@link #MAX_SHOWS} times,
- * after which it simply stays due for the next session; when it comes back it can be Good at best.
+ * after which it simply stays due for the next session. A card missed earlier the same day, in this
+ * session or an earlier one, can be Good at best: right after seeing the answer isn't "easy".
  * A bonus round ({@link #bonus}) is practice only: answers don't touch the schedule or the deck.
  */
 public final class Session {
@@ -36,6 +37,10 @@ public final class Session {
     private int finished;
     private int answers;
     private boolean comeback;
+    /** What has already gone into the day's history, so a paused and resumed session counts once. */
+    private boolean recorded;
+    private int recordedAnswers;
+    private int recordedCorrect;
 
     private Session(Deck deck, Srs srs, List<Card> picked, boolean bonus) {
         this.deck = deck;
@@ -158,6 +163,27 @@ public final class Session {
         return planned >= PERFECT_MIN_CARDS && isDone() && firstTryCorrect() == planned;
     }
 
+    /** True once (part of) this session has been added to the day's history. */
+    public boolean recorded() {
+        return recorded;
+    }
+
+    /** Answers not yet added to the day's history. */
+    public int unrecordedAnswers() {
+        return answers - recordedAnswers;
+    }
+
+    /** Right-first-time cards not yet added to the day's history. */
+    public int unrecordedCorrect() {
+        return firstTryCorrect() - recordedCorrect;
+    }
+
+    public void markRecorded() {
+        recorded = true;
+        recordedAnswers = answers;
+        recordedCorrect = firstTryCorrect();
+    }
+
     /** True if a tricky card stopped being tricky during this session. */
     public boolean comeback() {
         return comeback;
@@ -176,8 +202,8 @@ public final class Session {
         shows.put(card.id(), count);
         Boolean first = firstTry.get(card.id());
         if (first == null) firstTry.put(card.id(), rating != Rating.AGAIN);
-        // Missed earlier in this session: getting it right now is good, but not "easy".
-        if (Boolean.FALSE.equals(first) && rating == Rating.EASY) rating = Rating.GOOD;
+        // Missed earlier in this session or earlier today: getting it right now is good, but not "easy".
+        if (rating == Rating.EASY && (Boolean.FALSE.equals(first) || srs.missedToday(card, now))) rating = Rating.GOOD;
         answers++;
 
         boolean again;

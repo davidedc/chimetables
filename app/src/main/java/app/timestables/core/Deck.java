@@ -34,6 +34,8 @@ public final class Deck {
     public int fastRunBest;
     /** Celebration stickers already shown (collected), by file name. */
     public final Set<String> stickers = new java.util.LinkedHashSet<>();
+    /** Local day number when the last new sticker was collected: one new sticker a day. */
+    public long stickerDay;
 
     public static final class DayStats {
         public int sessions;
@@ -127,12 +129,18 @@ public final class Deck {
     }
 
     public void recordSession(long day, int answers, int correct, boolean perfect, boolean morning) {
+        recordSession(day, true, answers, correct, perfect, morning);
+    }
+
+    /** As above; {@code newSession} false adds to a session already counted (one that was resumed). */
+    public void recordSession(long day, boolean newSession, int answers, int correct, boolean perfect,
+                              boolean morning) {
         DayStats d = days.get(day);
         if (d == null) {
             d = new DayStats();
             days.put(day, d);
         }
-        d.sessions++;
+        if (newSession) d.sessions++;
         d.answers += answers;
         d.correct += correct;
         if (perfect) d.perfect++;
@@ -177,6 +185,25 @@ public final class Deck {
         return n;
     }
 
+    /**
+     * The stickers a celebration may show: ones not collected yet, but only if no new one was
+     * collected today (one a day keeps them special); otherwise the collected ones again.
+     */
+    public List<String> stickerPool(List<String> available, long today) {
+        List<String> fresh = new ArrayList<>();
+        List<String> owned = new ArrayList<>();
+        for (String name : available) (stickers.contains(name) ? owned : fresh).add(name);
+        if (!fresh.isEmpty() && (stickerDay != today || owned.isEmpty())) return fresh;
+        return owned.isEmpty() ? fresh : owned;
+    }
+
+    /** Records a sticker shown on a celebration; true if it is new to the collection. */
+    public boolean collectSticker(String name, long today) {
+        if (!stickers.add(name)) return false;
+        stickerDay = today;
+        return true;
+    }
+
     public void reset() {
         cards.clear();
         newDay = 0;
@@ -186,6 +213,7 @@ public final class Deck {
         fastRun = 0;
         fastRunBest = 0;
         stickers.clear();
+        stickerDay = 0;
     }
 
     /** Parent-mode summary for a set of cards. */

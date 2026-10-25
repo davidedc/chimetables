@@ -29,6 +29,9 @@ her **first key press**, so slow typing doesn't count:
 | right after 10 s | Hard | the interval grows only a little; not automatic yet |
 | wrong | Again | shown the right answer, asked again in this session, then the next day |
 
+A card missed earlier the same day counts as Good at best, even in a later session: right after
+seeing the answer isn't "easy".
+
 After that the gaps grow about 2.5× each time (1 → 3 → 8 → 20 days), capped at 60 days.
 A card forgotten 4 times becomes "tricky" and is reviewed at least every 14 days until it sticks.
 The details are in [the scheduler](../README.md#the-scheduler-child-tuned-sm-2).
@@ -45,10 +48,16 @@ The details are in [the scheduler](../README.md#the-scheduler-child-tuned-sm-2).
   schedule and earns no streak days, badges or stickers (a great round still gets confetti), so
   there's nothing to farm.
 - **Quiet hours block playing by hand too**, so it can't become a bedtime game.
+- **No restarting for a clean slate.** On her first day she found that turning the screen off
+  after a mistake and sliding again gave a fresh session, and with it "Perfect!" and a sticker.
+  Now a session left unfinished carries on ("Slide to carry on") if she comes back within
+  10 minutes, mistakes included.
 
 ## Rewards
 
 - A sticker and confetti for a session with at least 80% right first time, or for a new badge.
+  Only the first such sticker each day is a new one for her collection; later ones re-show stickers
+  she has. Without that limit she collected 7 of 9 on her first day.
 - Badges for streaks, perfect sessions, mornings, answering every call in a day, runs of quick
   answers, beating a tricky card, totals, and mastering each table.
 - A streak counts days with at least one finished session, and isn't broken until a whole day is missed.

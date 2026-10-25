@@ -24,6 +24,8 @@ public final class Card {
     public int seen;
     public int correct;
     public long lastSeenAt;
+    /** When it was last answered wrong (epoch millis, 0 = never). */
+    public long missedAt;
     /** Moving average of question-to-reveal time in ms (0 = not measured yet). */
     public long revealMsAvg;
 

@@ -275,4 +275,41 @@ public class SessionTest {
         List<String> shown = playAll(bonus(deck, 3), Rating.GOOD, now);
         assertEquals(java.util.Arrays.asList("9x9", "7x8", "6x6"), shown);
     }
+
+    @Test
+    public void aCardMissedEarlierTodayCannotComeBackAsEasyInALaterSession() {
+        Deck deck = new Deck();
+        Session first = plan(deck, at("2026-10-20T07:45"));
+        Card missed = first.current();
+        first.answer(Rating.AGAIN, at("2026-10-20T07:45"), 2_000);
+        // She turns the screen off and starts again: the missed card is due straight away.
+        Session again = plan(deck, at("2026-10-20T07:46"));
+        assertEquals(missed, again.current());
+        assertEquals(Rating.GOOD, again.answer(Rating.EASY, at("2026-10-20T07:46"), 1_000));
+        assertEquals(Card.State.LEARNING, missed.state); // Easy would have graduated it to 3 days
+        assertEquals(1, missed.step);
+
+        // The next day a quick right answer is Easy again.
+        Session tomorrow = plan(deck, at("2026-10-21T08:30"));
+        while (tomorrow.current() != missed) tomorrow.answer(Rating.GOOD, at("2026-10-21T08:30"));
+        assertEquals(Rating.EASY, tomorrow.answer(Rating.EASY, at("2026-10-21T08:31"), 1_000));
+    }
+
+    @Test
+    public void partOfASessionIsRecordedOnceAndTheRestAddedLater() {
+        Deck deck = new Deck();
+        long now = at("2026-10-20T07:45");
+        Session s = plan(deck, now);
+        s.answer(Rating.GOOD, now);
+        s.answer(Rating.AGAIN, now);
+        assertFalse(s.recorded());
+        assertEquals(2, s.unrecordedAnswers());
+        assertEquals(1, s.unrecordedCorrect());
+        s.markRecorded();
+        assertEquals(0, s.unrecordedAnswers());
+        playAll(s, Rating.GOOD, now);
+        assertTrue(s.recorded());
+        assertEquals(4, s.unrecordedAnswers()); // 3 more cards + the missed one again
+        assertEquals(3, s.unrecordedCorrect());
+    }
 }

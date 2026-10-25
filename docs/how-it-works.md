@@ -26,6 +26,9 @@ Alarms.scheduleNext ──setAlarmClock()──▶ WakeReceiver ──▶ KioskA
   While calling it holds its own screen wake lock and chimes on the alarm stream every 2 minutes,
   up to 5 times. `FLAG_KEEP_SCREEN_ON` isn't used because it proved unreliable on this firmware
   after an alarm wake.
+- **A session in progress wins.** A wake-up that fires while she is answering is ignored. If the
+  screen goes off mid-session (power button, or 3 minutes without a touch), the session is kept
+  in memory, and sliding again within 10 minutes carries on with it rather than starting afresh.
 
 ## Kiosk lock-down
 

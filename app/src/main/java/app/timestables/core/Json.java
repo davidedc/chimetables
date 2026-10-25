@@ -30,6 +30,7 @@ public final class Json {
                         .put("seen", c.seen)
                         .put("correct", c.correct)
                         .put("last", c.lastSeenAt)
+                        .put("missed", c.missedAt)
                         .put("tricky", c.tricky)
                         .put("revealMs", c.revealMsAvg));
             }
@@ -54,6 +55,7 @@ public final class Json {
                     .put("days", days)
                     .put("badges", badges)
                     .put("stickers", new JSONArray(deck.stickers))
+                    .put("stickerDay", deck.stickerDay)
                     .put("cards", cards)
                     .toString(1);
         } catch (JSONException e) {
@@ -84,6 +86,7 @@ public final class Json {
         }
         JSONArray stickers = root.optJSONArray("stickers");
         for (int i = 0; stickers != null && i < stickers.length(); i++) deck.stickers.add(stickers.getString(i));
+        deck.stickerDay = root.optLong("stickerDay");
         JSONObject badges = root.optJSONObject("badges");
         if (badges != null) {
             for (java.util.Iterator<String> it = badges.keys(); it.hasNext(); ) {
@@ -105,6 +108,7 @@ public final class Json {
             c.seen = o.optInt("seen");
             c.correct = o.optInt("correct");
             c.lastSeenAt = o.optLong("last");
+            c.missedAt = o.optLong("missed");
             c.tricky = o.optBoolean("tricky");
             c.revealMsAvg = o.optLong("revealMs");
             deck.cards.put(c.id(), c);

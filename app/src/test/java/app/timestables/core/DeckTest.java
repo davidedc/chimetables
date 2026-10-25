@@ -102,4 +102,29 @@ public class DeckTest {
         deck.countNewCard(101);
         assertEquals(4, deck.newAllowedToday(101, 5));
     }
+
+    @Test
+    public void oneNewStickerADayThenCollectedOnesAgain() {
+        Deck deck = new Deck();
+        List<String> all = Arrays.asList("a.png", "b.png", "c.png");
+        assertEquals(all, deck.stickerPool(all, 10));
+        assertTrue(deck.collectSticker("b.png", 10));
+        assertEquals(Arrays.asList("b.png"), deck.stickerPool(all, 10)); // later the same day: repeats only
+        assertTrue(!deck.collectSticker("b.png", 10));
+        assertEquals(Arrays.asList("a.png", "c.png"), deck.stickerPool(all, 11)); // next day: a new one
+        deck.collectSticker("a.png", 11);
+        deck.collectSticker("c.png", 12);
+        assertEquals(all, deck.stickerPool(all, 13)); // all collected: any of them
+        assertEquals(Arrays.asList(), deck.stickerPool(Arrays.<String>asList(), 13));
+    }
+
+    @Test
+    public void aResumedSessionAddsToTheDayWithoutCountingTwice() {
+        Deck deck = new Deck();
+        deck.recordSession(10, 3, 2, false, false);
+        deck.recordSession(10, false, 3, 2, false, false);
+        assertEquals(1, deck.days.get(10L).sessions);
+        assertEquals(6, deck.days.get(10L).answers);
+        assertEquals(4, deck.days.get(10L).correct);
+    }
 }

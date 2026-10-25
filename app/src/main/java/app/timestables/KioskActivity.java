@@ -45,7 +45,9 @@ import java.util.Random;
  * -> ... -> DONE ("well done", or confetti + a sticker + any new badges), then screen off.
  * Answers are graded automatically from correctness and recall speed (see {@link Answer}).
  * Outside quiet hours she can also wake the screen and slide to play: a normal session if anything
- * is due, otherwise a bonus round that doesn't change the schedule or earn rewards.
+ * is due, otherwise a bonus round that doesn't change the schedule or earn rewards. A session left
+ * unfinished (screen off) carries on where it was if she slides again within 10 minutes, so
+ * restarting after a mistake doesn't give a fresh, "perfect" session.
  * Tapping the top-left corner 7 times opens the PIN prompt for parent mode.
  */
 public class KioskActivity extends Activity {
@@ -63,16 +65,21 @@ public class KioskActivity extends Activity {
     private static final int MORNING_BEFORE_HOUR = 9;
     /** A session keeps the screen on until this long after the last touch. */
     private static final long SESSION_IDLE_MS = 3 * 60_000L;
+    /** An unfinished session carries on if she slides again within this long. */
+    private static final long RESUME_MS = 10 * 60_000L;
 
     private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE }
 
     /** What sliding on the sleeping screen starts. */
-    private enum Play { NOTHING, SESSION, BONUS }
+    private enum Play { NOTHING, SESSION, BONUS, RESUME }
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Random random = new Random();
     private Mode mode = Mode.SLEEPING;
     private Session session;
+    /** A session left unfinished when the screen went off, and when (elapsedRealtime). */
+    private Session paused;
+    private long pausedAt;
     private int beepsPlayed;
     private long lastModeChange;
     private int cornerTaps;
@@ -130,7 +137,11 @@ public class KioskActivity extends Activity {
             Maintenance.end(this, false); // onResume then re-enters lock task
         } else if (intent != null && ACTION_WAKE.equals(intent.getAction())) {
             intent.setAction(null); // don't re-trigger on recreation
-            startCalling();
+            if (mode == Mode.QUESTION || mode == Mode.FEEDBACK || mode == Mode.DONE) {
+                AppLog.log(this, "wake while playing (" + mode + "): carrying on");
+            } else {
+                startCalling();
+            }
         } else if (mode == Mode.SLEEPING) {
             render();
         }
@@ -166,9 +177,14 @@ public class KioskActivity extends Activity {
         // The screen went off mid-call or mid-session (power button, or the child walked away and
         // the idle timeout ran out). Progress is saved per answer, so just go back to sleep.
         AppLog.log(this, "screen off during " + mode + (mode == Mode.CALLING ? " after " + beepsPlayed + " beeps" : ""));
-        if ((mode == Mode.QUESTION || mode == Mode.FEEDBACK) && session != null && session.answers() > 0
-                && !session.isBonus()) {
-            recordSession(); // a partly done session still counts for the streak
+        if ((mode == Mode.QUESTION || mode == Mode.FEEDBACK) && session != null) {
+            if (session.answers() > 0 && !session.isBonus()) recordSession(); // still counts for the streak
+            if (!session.isDone()) {
+                paused = session;
+                pausedAt = SystemClock.elapsedRealtime();
+                AppLog.log(this, "session paused after " + session.answers() + " answers; carries on if resumed within "
+                        + RESUME_MS / 60_000 + " min");
+            }
         }
         stopCalling();
         handler.removeCallbacksAndMessages(null);
@@ -257,6 +273,15 @@ public class KioskActivity extends Activity {
 
     private void startSession(boolean bonus) {
         stopCalling();
+        Session left = resumable();
+        paused = null;
+        if (left != null) {
+            session = left;
+            holdScreen(SESSION_IDLE_MS);
+            AppLog.log(this, "session resumed: " + left.finished() + " of " + left.planned() + " cards done");
+            next();
+            return;
+        }
         Store store = Store.get(this);
         Settings s = store.settings();
         session = bonus
@@ -352,21 +377,27 @@ public class KioskActivity extends Activity {
             celebrate = great || !earned.isEmpty();
             doneEmoji = session.perfect() ? "🎯" : great ? "🎉" : "🌟";
             doneTitle = session.perfect() ? "Perfect!" : great ? "Amazing!" : "Well done!";
+            boolean newSticker = false;
             if (celebrate) {
-                doneSticker = Stickers.pick(this, deck.stickers);
+                doneSticker = Stickers.pick(this, deck, today);
                 if (doneSticker != null) {
-                    deck.stickers.add(doneSticker.name);
+                    newSticker = deck.collectSticker(doneSticker.name, today);
                     store.saveDeck();
                 }
             }
             StringBuilder detail = new StringBuilder();
+            if (newSticker) {
+                detail.append("🖼️ New sticker! ").append(deck.stickers.size()).append(" of ")
+                        .append(Stickers.all(this).size()).append('\n');
+            }
             for (Badges.Badge b : earned) detail.append("New badge: ").append(b.emoji).append(' ').append(b.title).append('\n');
             int streak = deck.streak(today);
             if (streak >= 2) detail.append("🔥 ").append(streak).append(" days in a row!");
             doneDetail = detail.toString().trim();
             AppLog.log(this, "session done: " + session.finished() + " cards, " + session.firstTryCorrect() + "/"
                     + session.planned() + " right first time, perfect=" + session.perfect() + ", streak=" + streak
-                    + ", new badges=" + earned + (doneSticker != null ? ", sticker " + doneSticker.name : ""));
+                    + ", new badges=" + earned
+                    + (doneSticker != null ? ", sticker " + doneSticker.name + (newSticker ? " (new)" : " (again)") : ""));
         } else {
             AppLog.log(this, "session done: nothing to practise");
         }
@@ -389,7 +420,9 @@ public class KioskActivity extends Activity {
         long now = System.currentTimeMillis();
         long today = srs.dayNumber(now);
         boolean morning = srs.hourOfDay(now) < MORNING_BEFORE_HOUR;
-        deck.recordSession(today, session.answers(), session.firstTryCorrect(), session.perfect(), morning);
+        deck.recordSession(today, !session.recorded(), session.unrecordedAnswers(), session.unrecordedCorrect(),
+                session.perfect(), morning);
+        session.markRecorded();
         Badges.SessionResult result = new Badges.SessionResult();
         result.perfect = session.perfect();
         result.comeback = session.comeback();
@@ -559,7 +592,7 @@ public class KioskActivity extends Activity {
                 subText.setText(next > 0 ? "Zzz… see you at " + Alarms.formatTime(next) : "Zzz…");
                 Play play = playOffered(store, now);
                 slider.setVisibility(play == Play.NOTHING ? View.GONE : View.VISIBLE);
-                slider.setLabel(play == Play.BONUS ? "Bonus round ⭐" : "Slide to play");
+                slider.setLabel(play == Play.BONUS ? "Bonus round ⭐" : play == Play.RESUME ? "Slide to carry on" : "Slide to play");
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
                 } else {
@@ -621,13 +654,23 @@ public class KioskActivity extends Activity {
         }
     }
 
-    /** Nothing during quiet hours; otherwise a session if anything is due, else a bonus round. */
-    private static Play playOffered(Store store, long now) {
+    /**
+     * Nothing during quiet hours; otherwise the unfinished session if it was left in the last
+     * 10 minutes, a new session if anything is due, else a bonus round.
+     */
+    private Play playOffered(Store store, long now) {
         Settings s = store.settings();
         if (WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd)) return Play.NOTHING;
+        if (resumable() != null) return Play.RESUME;
         List<Card> active = store.activeCards();
         if (!Session.nothingToDo(store.deck(), store.srs(), active, s.newPerDay, now)) return Play.SESSION;
         return Session.bonusAvailable(active) ? Play.BONUS : Play.NOTHING;
+    }
+
+    /** The paused session if it was left less than {@link #RESUME_MS} ago; otherwise forgets it. */
+    private Session resumable() {
+        if (paused != null && SystemClock.elapsedRealtime() - pausedAt > RESUME_MS) paused = null;
+        return paused;
     }
 
     /**

@@ -28,7 +28,11 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
   one shows a gentle "Not 54, let's remember 56!" and the card comes back two cards later.
   Happy sounds only. There are no self-rating buttons: the app grades her (see the scheduler below).
 - **End:** "Well done!", or confetti, a fanfare and a **sticker** when at least 80% were right first
-  time or a badge was earned. Then the screen goes off.
+  time or a badge was earned (at most one *new* sticker a day; later ones re-show her collection).
+  Then the screen goes off.
+- **Stopping halfway:** turning the screen off pauses the session. Sliding again within 10 minutes
+  carries on where she left off, mistakes included, so restarting after a wrong answer doesn't buy
+  a fresh "perfect" session. A wake-up that comes during a session is ignored.
 - **Sleeping screen** (if the power button is pressed): when the next wake-up is, the current
   streak and recent badges, and "Slide to play" if cards are due. Playing early uses the same due
   cards and daily new-card allowance, so a later wake-up just finds less to do (or stays silent).
@@ -163,7 +167,7 @@ Implemented from the Anki manual's description of its SM-2 variant (not Anki's A
   typing speed doesn't count): wrong → Again; right within 3 s → Easy; right later → Good; right but
   after **more than 10 s** → Hard (interval × 1.2, ease −0.15, and a learning card doesn't graduate
   yet). Times tables should be automatic, not worked out. Over 90 s is ignored as distraction.
-  A card missed earlier in the same session can't come back as Easy.
+  A card missed earlier the same day (in this session or an earlier one) can't come back as Easy.
 - A wrong number is marked wrong as soon as it has as many digits as the answer, so she can't keep
   trying numbers until one is accepted.
 - **Tricky cards:** forgotten 4 times → "tricky" (💪 shown, interval capped at 14 days) until
@@ -194,8 +198,8 @@ live in **`family-assets/stickers/`, which is git-ignored** and only bundled int
 - `family-assets/stickers/phrases.txt` maps each file to its line: `wow.png: Wow!! Amazing!`
 - rebuild and install: `scripts/build.sh release && scripts/install.sh release`
 
-One sticker appears per celebration, preferring ones she hasn't collected yet; the sleeping screen
-shows the collection (🖼️ 3/9). With the folder empty or missing the app uses emoji instead.
+One sticker appears per celebration. At most one a day is new ("🖼️ New sticker! 4 of 9"); other
+celebrations that day re-show one she already has. The sleeping screen shows the collection (🖼️ 4 of 9). With the folder empty or missing the app uses emoji instead.
 Back this folder up along with `keystore/`.
 
 ## Recovery and unlocking

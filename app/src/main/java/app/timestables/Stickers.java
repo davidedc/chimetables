@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 
+import app.timestables.core.Deck;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
 /**
  * Optional celebration stickers from the APK's assets/stickers/ folder, which the build fills from
@@ -61,12 +62,10 @@ final class Stickers {
     }
 
     /** A sticker she hasn't collected yet if possible, else any; null if none are bundled. */
-    static Sticker pick(Context context, Set<String> collected) {
-        List<String> names = all(context);
-        if (names.isEmpty()) return null;
-        List<String> fresh = new ArrayList<>(names);
-        fresh.removeAll(collected);
-        List<String> pool = fresh.isEmpty() ? names : fresh;
+    /** A sticker for a celebration: a new one at most once a day (see {@link Deck#stickerPool}). */
+    static Sticker pick(Context context, Deck deck, long today) {
+        List<String> pool = deck.stickerPool(all(context), today);
+        if (pool.isEmpty()) return null;
         String name = pool.get(RANDOM.nextInt(pool.size()));
         try (InputStream in = context.getAssets().open(DIR + "/" + name)) {
             Bitmap bitmap = BitmapFactory.decodeStream(in);
