@@ -47,8 +47,8 @@ import java.util.Random;
  * -> ... -> DONE ("well done", or confetti + a sticker + any new badges), then screen off.
  * Collecting the first sticker set unlocks riddles: from then on the first finished session of
  * each day goes on to STORY (yesterday's answer, today's sealed riddle card), and the very first
- * time it explains the unlock. On the sleeping screen a second slider opens her BOOK (stickers,
- * badges, a map of the tables, riddles), and today's riddle is shown.
+ * time it explains the unlock. On the sleeping screen "Slide to open" turns into two buttons: play
+ * (the big one) or her BOOK (stickers, badges, a map of the tables, riddles). Today's riddle is shown.
  * Answers are graded automatically from correctness and recall speed (see {@link Answer}).
  * Outside quiet hours she can also wake the screen and slide to play: a normal session if anything
  * is due, otherwise a bonus round that doesn't change the schedule or earn rewards. A session left
@@ -77,6 +77,8 @@ public class KioskActivity extends Activity {
     private static final long BOOK_IDLE_MS = 90_000L;
     /** Before "Next" appears on a done screen that leads on to riddles, so a stray tap can't skip it. */
     private static final long DONE_NEXT_PAUSE_MS = 2000;
+    /** The play / book buttons go back to the slider after this long without a choice. */
+    private static final long CHOICE_MS = 10_000;
 
     private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE, BOOK, STORY }
 
@@ -107,7 +109,7 @@ public class KioskActivity extends Activity {
     // Done screen
     private String doneEmoji;
     private String doneTitle;
-    private String doneDetail;
+    private CharSequence doneDetail;
     private Stickers.Sticker doneSticker;
     /** Screens to show after the done screen (unlock, riddles), or null. */
     private List<StoryView.Step> story;
@@ -116,7 +118,10 @@ public class KioskActivity extends Activity {
     private LinearLayout content;
     private FrameLayout hero;
     private RiddleCardView todayCard;
-    private SlideToStart bookSlider;
+    /** After "Slide to open": play (big) or her book, in the slider's place. */
+    private LinearLayout choice;
+    private Button playButton;
+    private boolean choosing;
     /** Holds the book or the story on top of everything but the confetti. */
     private FrameLayout overlay;
     private StoryView storyView;
@@ -135,6 +140,10 @@ public class KioskActivity extends Activity {
     private final Runnable giveUpTask = this::giveUp;
     private final Runnable sleepTask = this::goToSleep;
     private final Runnable nextTask = this::next;
+    private final Runnable endChoiceTask = () -> {
+        choosing = false;
+        if (mode == Mode.SLEEPING) render();
+    };
     private final Runnable doneNextTask = () -> {
         doneNextReady = true;
         if (mode == Mode.DONE) {
@@ -202,6 +211,8 @@ public class KioskActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
+        choosing = false; // the screen comes back on with the slider, never the buttons
+        handler.removeCallbacks(endChoiceTask);
         if (isChangingConfigurations() || mode == Mode.SLEEPING) return;
         // The screen went off mid-call or mid-session (power button, or the child walked away and
         // the idle timeout ran out). Progress is saved per answer, so just go back to sleep.
@@ -417,19 +428,18 @@ public class KioskActivity extends Activity {
                     store.saveDeck();
                 }
             }
-            StringBuilder detail = new StringBuilder();
+            List<CharSequence> lines = new ArrayList<>();
             if (newSticker) {
                 // No total once the extra stickers are unlocked: the collection just keeps growing.
-                detail.append("🖼️ New sticker!");
-                if (deck.unlockedDay == 0) {
-                    detail.append(' ').append(deck.stickers.size()).append(" of ").append(Stickers.starter(this).size());
-                }
-                detail.append('\n');
+                String count = deck.unlockedDay == 0 ? " " + deck.stickers.size() + " of " + Stickers.starter(this).size() : "";
+                lines.add(StickerIcon.before("New sticker!" + count, Ui.ORANGE, Ui.dp(this, 22)));
             }
-            for (Badges.Badge b : earned) detail.append("New badge: ").append(b.emoji).append(' ').append(b.title).append('\n');
+            for (Badges.Badge b : earned) lines.add("New badge: " + b.emoji + ' ' + b.title);
             int streak = deck.streak(today);
-            if (streak >= 2) detail.append("🔥 ").append(streak).append(" days in a row!");
-            doneDetail = detail.toString().trim();
+            if (streak >= 2) lines.add("🔥 " + streak + " days in a row!");
+            android.text.SpannableStringBuilder detail = new android.text.SpannableStringBuilder();
+            for (CharSequence line : lines) detail.append(detail.length() > 0 ? "\n" : "").append(line);
+            doneDetail = detail;
             AppLog.log(this, "session done: " + session.finished() + " cards, " + session.firstTryCorrect() + "/"
                     + session.planned() + " right first time, perfect=" + session.perfect() + ", streak=" + streak
                     + ", new badges=" + earned
@@ -508,14 +518,17 @@ public class KioskActivity extends Activity {
                 "A brand-new kind of card, just for you.", "Next ➜");
         riddles.onShow = Chime::shimmer;
         steps.add(riddles);
-        steps.add(new StoryView.Step("How riddles work", storyText("Every day, your first session brings a new "
+        steps.add(new StoryView.Step("How riddles work", storyText("Every day, your first play brings a new "
                 + "riddle card.\n\nThink about it all day long…\n\nThe next day, you turn the card over to find "
                 + "the answer!"), "", "Next ➜"));
-        steps.add(new StoryView.Step("And…", reveal("🖼️", "More stickers"),
-                "You unlocked more stickers too. New ones will turn up as you play!", "Next ➜"));
+        List<String> more = Stickers.more(this);
+        if (!more.isEmpty()) {
+            steps.add(new StoryView.Step("And…", stickerReveal(),
+                    "You unlocked more stickers too. New ones will turn up as you play!", "Next ➜"));
+        }
         steps.add(new StoryView.Step("Your book", reveal("📒", "My book"),
-                "Your stickers, badges, riddles and a map of your times tables. Slide 📒 on the sleeping "
-                        + "screen to open it.", "Next ➜"));
+                "Your stickers, badges, riddles and a map of your times tables. On the sleeping screen, "
+                        + "slide to open, then tap 📒 Book.", "Next ➜"));
         return steps;
     }
 
@@ -562,6 +575,27 @@ public class KioskActivity extends Activity {
         e.setScaleX(0.3f);
         e.setScaleY(0.3f);
         e.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(600)
+                .setInterpolator(new OvershootInterpolator(2.2f)).start();
+        return box;
+    }
+
+    /** The sticker icon, big and gold, for "more stickers". */
+    private View stickerReveal() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        View icon = new View(this);
+        icon.setBackground(new StickerIcon(Ui.MYSTERY_GOLD, Ui.MYSTERY_GOLD, 14));
+        box.addView(icon, new LinearLayout.LayoutParams(Ui.dp(this, 132), Ui.dp(this, 132)));
+        TextView w = Ui.text(this, 40, Ui.MYSTERY_GOLD, false);
+        w.setTypeface(Ui.fancy(this));
+        w.setText("More stickers");
+        w.setPadding(0, Ui.dp(this, 14), 0, 0);
+        box.addView(w);
+        icon.setScaleX(0.3f);
+        icon.setScaleY(0.3f);
+        icon.setRotation(-20);
+        icon.animate().scaleX(1f).scaleY(1f).rotation(0).setStartDelay(200).setDuration(600)
                 .setInterpolator(new OvershootInterpolator(2.2f)).start();
         return box;
     }
@@ -613,6 +647,40 @@ public class KioskActivity extends Activity {
         story = null;
         AppLog.log(this, "riddle screens: " + steps.size());
         storyView.start(steps, this::goToSleep);
+    }
+
+    // ---------------------------------------------------------------- open: play or book
+
+    private void showChoice() {
+        choosing = true;
+        lastModeChange = SystemClock.uptimeMillis(); // the finger lifting off the slider isn't a tap
+        render();
+        choice.setAlpha(0f);
+        choice.setScaleX(0.94f);
+        choice.setScaleY(0.94f);
+        choice.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180).start();
+        handler.removeCallbacks(endChoiceTask);
+        handler.postDelayed(endChoiceTask, CHOICE_MS);
+    }
+
+    private void onChoice(boolean play) {
+        if (mode != Mode.SLEEPING || !choosing || !tapAllowed()) return;
+        handler.removeCallbacks(endChoiceTask);
+        choosing = false;
+        Store store = Store.get(this);
+        if (quietNow(store.settings())) {
+            render();
+        } else if (!play) {
+            openBook();
+        } else {
+            Play offered = playOffered(store, System.currentTimeMillis());
+            if (offered == Play.NOTHING) render();
+            else startSession(offered == Play.BONUS);
+        }
+    }
+
+    private static boolean quietNow(Settings s) {
+        return WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd);
     }
 
     // ---------------------------------------------------------------- book
@@ -769,28 +837,29 @@ public class KioskActivity extends Activity {
                 startSession(false);
             } else if (mode == Mode.SLEEPING) {
                 // Decide again now: the screen may have been on since quiet hours began.
-                Play play = playOffered(Store.get(this), System.currentTimeMillis());
-                if (play == Play.NOTHING) render();
-                else startSession(play == Play.BONUS);
+                Store store = Store.get(this);
+                if (quietNow(store.settings())) render();
+                else if (playOffered(store, System.currentTimeMillis()) == Play.NOTHING) openBook();
+                else showChoice();
             }
         });
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 88));
         sp.topMargin = Ui.dp(this, 6);
         content.addView(slider, sp);
 
-        // Her book needs a slide too, for the same reason.
-        bookSlider = new SlideToStart(this);
-        bookSlider.setColors(android.graphics.Color.parseColor("#DCD6FF"), Ui.BOOK_PURPLE);
-        bookSlider.setLabelSize(Ui.dp(this, 21));
-        bookSlider.setLabel("📒 My book");
-        bookSlider.setListener(() -> {
-            Settings s = Store.get(this).settings();
-            if (mode == Mode.SLEEPING && !WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd)) openBook();
-            else render();
-        });
-        LinearLayout.LayoutParams bsp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 62));
-        bsp.topMargin = Ui.dp(this, 8);
-        content.addView(bookSlider, bsp);
+        // The slide proved it isn't a pocket, so plain buttons are safe here. Playing is the big one,
+        // on the right: where the slide ends, under a right-handed thumb.
+        choice = new LinearLayout(this);
+        choice.setVisibility(View.GONE);
+        Button bookButton = Ui.button(this, "📒 Book", Ui.BOOK_PURPLE, 23);
+        bookButton.setOnClickListener(v -> onChoice(false));
+        LinearLayout.LayoutParams bbp = new LinearLayout.LayoutParams(0, -1, 1f);
+        bbp.rightMargin = Ui.dp(this, 8);
+        choice.addView(bookButton, bbp);
+        playButton = Ui.button(this, "", Ui.ORANGE, 27);
+        playButton.setOnClickListener(v -> onChoice(true));
+        choice.addView(playButton, new LinearLayout.LayoutParams(0, -1, 1.75f));
+        content.addView(choice, new LinearLayout.LayoutParams(sp));
 
         keypad = buildKeypad();
         content.addView(keypad, new LinearLayout.LayoutParams(-1, -2));
@@ -846,8 +915,8 @@ public class KioskActivity extends Activity {
         primary.setAlpha(1f);
         slider.setVisibility(View.GONE);
         slider.reset();
-        bookSlider.setVisibility(View.GONE);
-        bookSlider.reset();
+        if (mode != Mode.SLEEPING) choosing = false;
+        choice.setVisibility(View.GONE);
         keypad.setVisibility(View.GONE);
         keypad.setAlpha(1f);
         footer.setText("");
@@ -875,17 +944,23 @@ public class KioskActivity extends Activity {
                     subText.setMaxLines(1);
                     setHeroWeights(3.4f, 0.8f);
                 }
+                // One slider; after it, play or her book (nothing at all in quiet hours).
+                boolean quiet = quietNow(store.settings());
                 Play play = playOffered(store, now);
-                slider.setVisibility(play == Play.NOTHING ? View.GONE : View.VISIBLE);
-                slider.setLabel(play == Play.BONUS ? "Bonus round ⭐" : play == Play.RESUME ? "Slide to carry on" : "Slide to play");
-                Settings settings = store.settings();
-                boolean quiet = WakePlanner.isQuiet(LocalTime.now(), settings.quietStart, settings.quietEnd);
+                if (quiet) {
+                    choosing = false;
+                } else if (choosing && play != Play.NOTHING) {
+                    playButton.setText(play == Play.BONUS ? "⭐ Bonus round" : play == Play.RESUME ? "↩ Carry on" : "▶ Play");
+                    choice.setVisibility(View.VISIBLE);
+                } else {
+                    slider.setVisibility(View.VISIBLE);
+                    slider.setLabel("Slide to open");
+                }
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
                 } else {
                     footer.setVisibility(View.GONE);
                     fillShelf(store.deck(), store.srs().dayNumber(now), Stickers.starter(this).size());
-                    bookSlider.setVisibility(quiet ? View.GONE : View.VISIBLE);
                 }
                 break;
             }
@@ -1005,13 +1080,14 @@ public class KioskActivity extends Activity {
         if (streak >= 1) addChip("🔥 " + streak + (streak == 1 ? " day" : " days"));
         if (!deck.stickers.isEmpty()) {
             // Before the unlock she is collecting a set of known size; after it, no total.
-            addChip("🖼️ " + deck.stickers.size() + (deck.unlockedDay == 0 && firstSet > 0 ? " of " + firstSet : ""));
+            addChip(StickerIcon.before(deck.stickers.size() + (deck.unlockedDay == 0 && firstSet > 0 ? " of " + firstSet : ""),
+                    Ui.NIGHT_INK, Ui.dp(this, 19)));
         }
         if (!deck.badges.isEmpty()) addChip("🏅 " + deck.badges.size());
         shelf.setVisibility(shelf.getChildCount() > 0 ? View.VISIBLE : View.GONE);
     }
 
-    private void addChip(String text) {
+    private void addChip(CharSequence text) {
         TextView chip = Ui.text(this, 16, Ui.NIGHT_INK, true);
         chip.setText(text);
         GradientDrawable bg = new GradientDrawable();

@@ -34,21 +34,23 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
   explainer introduces them. From then on the first finished session of each day turns over
   yesterday's riddle card to show the answer, then deals a new card under a wax seal. She just
   reads it and thinks about it: the app never asks for her answer.
-- **Her book:** a second slider on the sleeping screen ("📒 My book") opens her stickers, every
-  badge (earned with dates, and the ones still to find), a map of every times-table fact coloured
-  by how well she knows it, and all her riddle cards. Look-only: nothing can be earned there.
+- **Her book:** her stickers, every badge (earned with dates, and the ones still to find), a map of
+  every times-table fact coloured by how well she knows it, and all her riddle cards. Look-only:
+  nothing can be earned there.
 - **Stopping halfway:** turning the screen off pauses the session. Sliding again within 10 minutes
   carries on where she left off, mistakes included, so restarting after a wrong answer doesn't buy
   a fresh "perfect" session. A wake-up that comes during a session is ignored.
 - **Sleeping screen** (if the power button is pressed): today's riddle card, when the next wake-up
-  is, her streak, sticker and badge counts, and "Slide to play" if cards are due. Playing early
-  uses the same due cards and daily new-card allowance, so a later wake-up just finds less to do
-  (or stays silent).
+  is, her streak, sticker and badge counts, and one **"Slide to open"**. The slide turns into two
+  buttons in the same place: a big **Play** on the right (or "Bonus round" / "Carry on") and a
+  smaller **📒 Book**; with no choice in 10 seconds it goes back to the slider. The slide keeps
+  pocket touches out; after it, plain taps are fine. Playing early uses the same due cards and
+  daily new-card allowance, so a later wake-up just finds less to do (or stays silent).
 - **Bonus round:** when nothing is due, the slider offers a bonus round instead: up to 5 cards she
   has already met, drawn at random from the least established ones. It is practice only: the
   schedule, streak, badges and stickers are untouched (confetti for a great round, nothing to
   collect), and `reviews.jsonl` marks those answers `"bonus":true`.
-- **Quiet hours** (19:30–07:00) also block playing by hand: no sliders at all, just "Zzz…".
+- **Quiet hours** (19:30–07:00) also block playing by hand: no slider at all, just "Zzz…".
 - **No screenshots:** screen capture is turned off for the whole device (device-owner policy), so
   nothing collects in a photo library. `CAPTURE --ez allow true` from the Mac lifts it for checking.
 
@@ -205,7 +207,7 @@ Celebration screens can show a sticker with a line under it. Stickers are person
 live in **`family-assets/stickers/`, which is git-ignored** and only bundled into your local build:
 
 - the **first set** goes straight in `family-assets/stickers/` (we use 9). She collects these with a
-  count ("🖼️ New sticker! 4 of 9"), and completing the set unlocks riddles
+  count ("New sticker! 4 of 9"), and completing the set unlocks riddles
 - the **extra stickers** go in `family-assets/stickers/more/`. They join after the unlock with no
   total shown, so the collection just keeps growing and finishing it isn't a goal in itself
 - PNG/JPG/WebP, about 300–360 px, transparent background with a white sticker border looks best
@@ -288,7 +290,7 @@ app/src/main/java/app/timestables/
                    Settings, Json, PinHasher, Riddle
   KioskActivity    the child's screen          ParentActivity  PIN-protected settings
   StoryView, RiddleCardView, RiddleBank        unlock explainer, riddle cards (seal, flip), the list
-  BookView, TablesMapView                      her book
+  BookView, TablesMapView, StickerIcon         her book
   Alarms, WakeReceiver, SystemEventsReceiver   wake-ups and rescheduling
   Kiosk, Maintenance, AdminReceiver            device-owner policy
   CommandReceiver  adb commands for scripts/   Stickers, Chime, ConfettiView, SlideToStart, PinPad, Ui
@@ -299,4 +301,6 @@ scripts/           build/install/provision/harden/unharden/logs/...
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](LICENSE). The riddle cards' decorative capitals are Cinzel Decorative by Natanael Gama (SIL
+Open Font License, `app/src/main/assets/fonts/`); the sticker icon is "sticker" from
+[Phosphor Icons](https://phosphoricons.com) (MIT), redrawn in `StickerIcon.java`.

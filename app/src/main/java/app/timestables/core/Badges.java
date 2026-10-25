@@ -34,13 +34,13 @@ public final class Badges {
 
     /** Fixed badges, in display order. Table badges ("7x master") are generated per table. */
     public static final List<Badge> FIXED = Arrays.asList(
-            new Badge("first_session", "🌱", "First steps", "Did your first session"),
+            new Badge("first_session", "🌱", "First steps", "Played for the first time"),
             new Badge("streak_3", "🔥", "On a roll", "Practised 3 days in a row"),
             new Badge("streak_7", "📅", "Week warrior", "Practised 7 days in a row"),
             new Badge("streak_14", "🚀", "Unstoppable", "Practised 14 days in a row"),
             new Badge("streak_30", "🏆", "Habit hero", "Practised 30 days in a row"),
-            new Badge("perfect_1", "🎯", "Bullseye", "Every card right first time in a session"),
-            new Badge("perfect_10", "💎", "Diamond", "10 perfect sessions"),
+            new Badge("perfect_1", "🎯", "Bullseye", "Every card right first time in one play"),
+            new Badge("perfect_10", "💎", "Diamond", "10 perfect plays"),
             new Badge("early_bird", "🐦", "Early bird", "Morning practice on 5 different days"),
             new Badge("full_house", "🏠", "Full house", "Answered every call in one day"),
             new Badge("speedy", "⚡", "Lightning", "10 quick right answers in a row"),

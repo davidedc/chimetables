@@ -87,7 +87,9 @@ The details are in [the scheduler](../README.md#the-scheduler-child-tuned-sm-2).
   a card can't be turned until she has had a few seconds with the question again.
 - **Her book** shows her stickers, all badges (and what is still to find), a map of the tables
   that turns gold as facts settle, and every riddle card so far. It's look-only, closed during
-  quiet hours, and opens with a slide, like everything else, so pocket taps can't open it.
+  quiet hours, and sits behind the same "Slide to open" as playing: the slide turns into a big Play
+  button (on the right, under a right-handed thumb) and a smaller 📒 Book button. One slider keeps
+  the screen calm and keeps playing the obvious choice.
 
 ## Why it's built this way
 

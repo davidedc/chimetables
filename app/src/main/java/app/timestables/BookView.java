@@ -37,7 +37,7 @@ final class BookView extends FrameLayout {
     private static final int STICKERS = 0, BADGES = 1, MAP = 2, RIDDLES = 3;
     /** dp from the screen edge to the title, tabs, headings and grids. */
     private static final int EDGE = 15;
-    private static final String[] TABS = {"🖼️ Stickers", "🏅 Badges", "🗺️ Map", "🧩 Riddles"};
+    private static final String[] TABS = {"Stickers", "🏅 Badges", "🗺️ Map", "🧩 Riddles"};
     /** Badges that stay a surprise until earned. "Lightning" is about speed, which she is never shown. */
     private static final List<String> SECRET = java.util.Arrays.asList("speedy", "comeback");
 
@@ -122,6 +122,8 @@ final class BookView extends FrameLayout {
             bg.setCornerRadius(Ui.dp(getContext(), 18));
             t.setBackground(bg);
             t.setTextColor(on ? Color.WHITE : Ui.INK);
+            // There is no sticker emoji: this tab uses the sticker icon, coloured like the text.
+            if (i == STICKERS) t.setText(StickerIcon.before(TABS[STICKERS], on ? Color.WHITE : Ui.INK, Ui.dp(getContext(), 17)));
         }
         page.removeAllViews();
         View v;
@@ -183,7 +185,7 @@ final class BookView extends FrameLayout {
                 : locked ? owned.size() + " of " + starter.size() + " stickers"
                 : owned.size() + (owned.size() == 1 ? " sticker" : " stickers");
         col.addView(heading(c, head, locked && !owned.isEmpty() ? "Collect them all!" : owned.isEmpty()
-                ? "A great session earns a sticker." : "Tap one to see it big."));
+                ? "A great play earns a sticker." : "Tap one to see it big."));
         LinearLayout row = null;
         for (int i = 0; i < slots.size(); i++) {
             if (i % 3 == 0) {
@@ -388,7 +390,7 @@ final class BookView extends FrameLayout {
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
         if (cards.isEmpty()) {
-            col.addView(heading(c, "No riddles yet", "Your first session of the day brings a new riddle."));
+            col.addView(heading(c, "No riddles yet", "Your first play of the day brings a new riddle."));
             return col;
         }
         if (riddleIndex < 0 || riddleIndex >= cards.size()) riddleIndex = cards.size() - 1;
@@ -429,7 +431,7 @@ final class BookView extends FrameLayout {
                 }
                 card.setVisibility(VISIBLE);
                 card.bind(r, i + 1, !latest, false);
-                hint.setText(latest ? "🔒 The answer comes with your first session "
+                hint.setText(latest ? "🔒 The answer comes with your first play "
                         + (deck.riddles.get(i).day == today ? "tomorrow." : "today.")
                         : "Tap the card to turn it over.");
             }
