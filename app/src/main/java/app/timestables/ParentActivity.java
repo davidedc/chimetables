@@ -32,6 +32,8 @@ import java.util.TreeSet;
 /** PIN-protected settings. Changes are saved and applied when leaving the screen. */
 public class ParentActivity extends Activity {
     private static final long IDLE_CLOSE_MS = 3 * 60_000L;
+    /** True while parent mode is on screen: a scheduled wake-up then leaves it alone. */
+    static volatile boolean open;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable idleClose = this::finish;
@@ -57,6 +59,7 @@ public class ParentActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        open = true;
         onUserInteraction();
     }
 
@@ -69,10 +72,24 @@ public class ParentActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        open = false;
         handler.removeCallbacks(idleClose);
         Store.get(this).saveSettings();
         Kiosk.applyDisplaySettings(this, settings);
         Alarms.scheduleNext(this, "settings");
+    }
+
+    /**
+     * The screen went off (or something covered us): close, so whoever turns the screen on next finds
+     * the kiosk, never an unlocked parent mode.
+     */
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (!isChangingConfigurations() && !isFinishing()) {
+            AppLog.log(this, "parent mode closed: screen off");
+            finish();
+        }
     }
 
     private void build() {

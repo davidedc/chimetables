@@ -73,8 +73,12 @@ public class KioskActivity extends Activity {
     private static final long SESSION_IDLE_MS = 3 * 60_000L;
     /** An unfinished session carries on if she slides again within this long. */
     private static final long RESUME_MS = 10 * 60_000L;
-    /** The book keeps the screen on until this long after the last touch. */
-    private static final long BOOK_IDLE_MS = 90_000L;
+    /** The book and the riddle screens keep the screen on until this long after the last touch. */
+    private static final long BROWSE_IDLE_MS = 90_000L;
+    /** A done screen waiting for "Next" (riddles to come) goes to sleep after this long untouched. */
+    private static final long DONE_STORY_WAIT_MS = 60_000L;
+    /** What the screen shows, for STATUS (scripts/install.sh won't update while she's using it). */
+    static volatile String currentMode = "SLEEPING";
     /** Before "Next" appears on a done screen that leads on to riddles, so a stray tap can't skip it. */
     private static final long DONE_NEXT_PAUSE_MS = 2000;
     /** The play / book buttons go back to the slider after this long without a choice. */
@@ -125,6 +129,7 @@ public class KioskActivity extends Activity {
     /** Holds the book or the story on top of everything but the confetti. */
     private FrameLayout overlay;
     private StoryView storyView;
+    private BookView book;
     private TextView topLine;
     private TextView bigText;
     private ImageView stickerView;
@@ -176,6 +181,14 @@ public class KioskActivity extends Activity {
             intent.setAction(null); // don't re-trigger on recreation
             if (mode == Mode.QUESTION || mode == Mode.FEEDBACK || mode == Mode.DONE || mode == Mode.STORY) {
                 AppLog.log(this, "wake while playing (" + mode + "): carrying on");
+            } else if (mode == Mode.BOOK && book != null) {
+                // She's holding it and reading: no alarm, no snatching the book away. A soft chime
+                // and a "Time to play!" banner in the book; the sleeping screen offers play too.
+                AppLog.log(this, "wake while reading the book: offered play there");
+                Chime.nudge();
+                book.offerPlay(() -> {
+                    if (mode == Mode.BOOK) startSession(false);
+                });
             } else {
                 startCalling();
             }
@@ -457,8 +470,9 @@ public class KioskActivity extends Activity {
             Chime.done();
         }
         // With riddles to come, wait for her to tap Next (shown after a pause) instead of sleeping.
+        // The riddle is already saved (sealed until she opens it), so walking off loses nothing.
         if (story != null) handler.postDelayed(doneNextTask, DONE_NEXT_PAUSE_MS);
-        else handler.postDelayed(sleepTask, celebrate ? CELEBRATION_MS : DONE_SCREEN_MS);
+        handler.postDelayed(sleepTask, story != null ? DONE_STORY_WAIT_MS : celebrate ? CELEBRATION_MS : DONE_SCREEN_MS);
     }
 
     // ---------------------------------------------------------------- riddles
@@ -482,6 +496,7 @@ public class KioskActivity extends Activity {
         boolean explain = !deck.unlockSeen;
         if (explain) steps.addAll(unlockSteps());
         Riddle current = null;
+        boolean sealed = true;
         if (deck.riddleDue(today)) {
             if (!deck.riddles.isEmpty()) {
                 Deck.DealtRiddle last = deck.riddles.get(deck.riddles.size() - 1);
@@ -495,10 +510,11 @@ public class KioskActivity extends Activity {
             AppLog.log(this, "riddle " + deck.riddles.size() + " dealt: " + current.question.replace('\n', ' '));
         } else if (explain && !deck.riddles.isEmpty()) {
             // The explainer was left half-way earlier today: end it with today's riddle again.
-            current = Deck.findRiddle(bank, deck.riddles.get(deck.riddles.size() - 1).key);
+            current = Deck.findRiddle(bank, deck.latestRiddle().key);
+            sealed = !deck.latestRiddle().opened;
         }
         store.saveDeck();
-        if (current != null) steps.add(riddleStep(current, deck.riddles.size(), explain));
+        if (current != null) steps.add(riddleStep(current, deck.riddles.size(), sealed, explain));
         return steps.isEmpty() ? null : steps;
     }
 
@@ -543,14 +559,17 @@ public class KioskActivity extends Activity {
         return step;
     }
 
-    /** Today's card, sealed. {@code endsExplainer}: reaching it means she has seen the unlock screens. */
-    private StoryView.Step riddleStep(Riddle r, int number, boolean endsExplainer) {
+    /** Today's card. {@code endsExplainer}: reaching it means she has seen the unlock screens. */
+    private StoryView.Step riddleStep(Riddle r, int number, boolean sealed, boolean endsExplainer) {
         RiddleCardView card = new RiddleCardView(this, false);
-        card.bind(r, number, false, true);
+        card.bind(r, number, false, sealed);
         StoryView.Step step = new StoryView.Step(number == 1 ? "Your first riddle" : "Today's riddle", card,
-                "Tap the seal to open it", "Bye bye 👋");
+                sealed ? "Tap the seal to open it" : "Think about it… the answer comes tomorrow!", "Bye bye 👋");
         step.afterHint = "Think about it… the answer comes tomorrow!";
-        step.card = card;
+        if (sealed) {
+            step.card = card;
+            step.afterCard = this::markRiddleOpened;
+        }
         if (endsExplainer) {
             step.onShow = () -> {
                 Store store = Store.get(this);
@@ -559,6 +578,16 @@ public class KioskActivity extends Activity {
             };
         }
         return step;
+    }
+
+    /** The seal of the newest riddle has been broken: it stays open everywhere from now on. */
+    void markRiddleOpened() {
+        Store store = Store.get(this);
+        Deck.DealtRiddle latest = store.deck().latestRiddle();
+        if (latest == null || latest.opened) return;
+        latest.opened = true;
+        store.saveDeck();
+        AppLog.log(this, "riddle " + store.deck().riddles.size() + " opened");
     }
 
     private View reveal(String emoji, String word) {
@@ -638,7 +667,7 @@ public class KioskActivity extends Activity {
         handler.removeCallbacks(sleepTask);
         handler.removeCallbacks(doneNextTask);
         setMode(Mode.STORY);
-        holdScreen(SESSION_IDLE_MS);
+        holdScreen(BROWSE_IDLE_MS);
         storyView = new StoryView(this);
         overlay.removeAllViews();
         overlay.addView(storyView, new FrameLayout.LayoutParams(-1, -1));
@@ -687,9 +716,10 @@ public class KioskActivity extends Activity {
 
     private void openBook() {
         setMode(Mode.BOOK);
-        holdScreen(BOOK_IDLE_MS);
+        holdScreen(BROWSE_IDLE_MS);
         overlay.removeAllViews();
-        overlay.addView(new BookView(this, this::closeBook), new FrameLayout.LayoutParams(-1, -1));
+        book = new BookView(this, this::closeBook, this::markRiddleOpened);
+        overlay.addView(book, new FrameLayout.LayoutParams(-1, -1));
         overlay.setVisibility(View.VISIBLE);
         AppLog.log(this, "book opened");
     }
@@ -697,11 +727,13 @@ public class KioskActivity extends Activity {
     private void closeBook() {
         if (mode != Mode.BOOK) return;
         setMode(Mode.SLEEPING);
+        releaseScreen(); // back to the normal screen timeout
     }
 
     private void closeOverlay() {
         if (storyView != null) storyView.stop();
         storyView = null;
+        book = null;
         if (overlay.getChildCount() > 0) overlay.removeAllViews();
         overlay.setVisibility(View.GONE);
     }
@@ -897,6 +929,7 @@ public class KioskActivity extends Activity {
     }
 
     private void render() {
+        currentMode = mode.name();
         Store store = Store.get(this);
         long now = System.currentTimeMillis();
         boolean night = mode == Mode.SLEEPING;
@@ -938,7 +971,7 @@ public class KioskActivity extends Activity {
                 if (latest != null) {
                     // Today's riddle to think about; the sleepy face moves down next to the time.
                     bigText.setVisibility(View.GONE);
-                    todayCard.bind(latest, store.deck().riddles.size(), false, false);
+                    todayCard.bind(latest, store.deck().riddles.size(), false, !store.deck().latestRiddle().opened);
                     todayCard.setVisibility(View.VISIBLE);
                     subText.setText("😴 " + zzz);
                     subText.setMaxLines(1);
@@ -1130,9 +1163,10 @@ public class KioskActivity extends Activity {
                 }
                 return true; // corner taps never reach the cards
             }
-            if (mode == Mode.BOOK) holdScreen(BOOK_IDLE_MS);
+            if (mode == Mode.BOOK) holdScreen(BROWSE_IDLE_MS);
             else if (mode != Mode.SLEEPING && mode != Mode.CALLING) holdScreen(SESSION_IDLE_MS);
-            if (!tapAllowed() && (mode == Mode.QUESTION || mode == Mode.DONE)) return true;
+            if (!tapAllowed() && (mode == Mode.QUESTION || mode == Mode.DONE || mode == Mode.BOOK
+                    || mode == Mode.STORY)) return true;
         }
         return super.dispatchTouchEvent(ev);
     }
@@ -1173,6 +1207,7 @@ public class KioskActivity extends Activity {
         session = null;
         story = null;
         mode = Mode.SLEEPING;
+        currentMode = "PARENT";
         closeOverlay();
         startActivity(new Intent(this, ParentActivity.class));
     }

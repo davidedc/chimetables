@@ -154,7 +154,7 @@ same key, and a device-owner app can't simply be uninstalled and reinstalled.
 | Script | Does |
 |---|---|
 | `build.sh [debug\|release]` | unit tests + APK. Debug builds are `testOnly` (removable device owner) |
-| `install.sh [debug\|release]` | install/update in place, handles hardened devices, syncs the clock |
+| `install.sh [debug\|release] [--force]` | install/update in place, handles hardened devices, syncs the clock; refuses while she's using the player (a call, a play, her book) unless `--force` |
 | `provision.sh [--keep-radios]` | device owner (asks), Doze whitelist, DuraSpeed + vendor auto shutdown off, Wi-Fi/BT off, nav bar off-screen, DND off, kiosk policies, Europe/London, hides 41 apps, clock |
 | `set-pin.sh` | set or reset the parent PIN (hidden input, stored only as a salted PBKDF2 hash) |
 | `settings.sh [json]` | show or change settings |

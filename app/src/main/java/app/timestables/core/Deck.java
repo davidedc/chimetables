@@ -52,11 +52,18 @@ public final class Deck {
     public static final class DealtRiddle {
         public final String key;
         public final long day;
+        /** She has broken its seal (after a play or in her book); until then it stays sealed everywhere. */
+        public boolean opened;
 
         public DealtRiddle(String key, long day) {
             this.key = key;
             this.day = day;
         }
+    }
+
+    /** The newest riddle, or null. */
+    public DealtRiddle latestRiddle() {
+        return riddles.isEmpty() ? null : riddles.get(riddles.size() - 1);
     }
 
     public static final class DayStats {

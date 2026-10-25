@@ -42,6 +42,8 @@ final class BookView extends FrameLayout {
     private static final List<String> SECRET = java.util.Arrays.asList("speedy", "comeback");
 
     private final Store store;
+    /** Called when she breaks the seal of the newest riddle here. */
+    private final Runnable onSealBroken;
     private final long today;
     private final LinearLayout tabs;
     private final FrameLayout page;
@@ -52,9 +54,10 @@ final class BookView extends FrameLayout {
     private float downX, downY;
     private boolean swiping;
 
-    BookView(Context c, Listener listener) {
+    BookView(Context c, Listener listener, Runnable onSealBroken) {
         super(c);
         store = Store.get(c);
+        this.onSealBroken = onSealBroken;
         today = store.srs().dayNumber(System.currentTimeMillis());
         riddlesOpen = store.deck().unlockedDay > 0;
         setBackgroundColor(Ui.BG);
@@ -420,6 +423,7 @@ final class BookView extends FrameLayout {
             public void run() {
                 int i = riddleIndex;
                 boolean latest = i == cards.size() - 1;
+                Deck.DealtRiddle dealt = deck.riddles.get(i);
                 Riddle r = cards.get(i);
                 label.setText("Riddle " + (i + 1) + " of " + cards.size());
                 prev.setAlpha(i > 0 ? 1f : 0.3f);
@@ -430,10 +434,17 @@ final class BookView extends FrameLayout {
                     return;
                 }
                 card.setVisibility(VISIBLE);
-                card.bind(r, i + 1, !latest, false);
-                hint.setText(latest ? "🔒 The answer comes with your first play "
-                        + (deck.riddles.get(i).day == today ? "tomorrow." : "today.")
-                        : "Tap the card to turn it over.");
+                // A card she hasn't opened yet (she walked off after playing) is still sealed here.
+                boolean sealed = latest && !dealt.opened;
+                card.bind(r, i + 1, !latest, sealed);
+                String answerWhen = "🔒 The answer comes with your first play "
+                        + (dealt.day == today ? "tomorrow." : "today.");
+                hint.setText(sealed ? "Tap the seal to open it." : latest ? answerWhen : "Tap the card to turn it over.");
+                card.setListener(() -> {
+                    if (!latest || dealt.opened) return;
+                    onSealBroken.run();
+                    hint.setText(answerWhen);
+                });
             }
         };
         prev.setOnClickListener(v -> {
@@ -450,6 +461,39 @@ final class BookView extends FrameLayout {
         });
         show.run();
         return col;
+    }
+
+    // ---------------------------------------------------------------- a call while she reads
+
+    /**
+     * A scheduled wake-up came while she's in her book: instead of snatching it away, a banner
+     * slides up at the bottom with a Play button. Closing the book works as usual.
+     */
+    void offerPlay(Runnable play) {
+        Context c = getContext();
+        if (findViewWithTag("play-banner") != null) return;
+        LinearLayout banner = new LinearLayout(c);
+        banner.setTag("play-banner");
+        banner.setGravity(Gravity.CENTER_VERTICAL);
+        banner.setBackground(rounded(Ui.ORANGE, 20));
+        banner.setElevation(Ui.dp(c, 6));
+        int p = Ui.dp(c, 10);
+        banner.setPadding(Ui.dp(c, 16), p, p, p);
+        banner.setClickable(true);
+        TextView t = Ui.text(c, 20, Color.WHITE, true);
+        t.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        t.setText("🔔 Time to play!");
+        banner.addView(t, new LinearLayout.LayoutParams(0, -2, 1f));
+        Button go = Ui.button(c, "▶ Play", Color.WHITE, 22);
+        go.setTextColor(Ui.ORANGE);
+        go.setOnClickListener(v -> play.run());
+        banner.addView(go, new LinearLayout.LayoutParams(Ui.dp(c, 120), Ui.dp(c, 54)));
+        // At the bottom, under her thumb, leaving the title and ✕ free.
+        LayoutParams lp = new LayoutParams(-1, -2, Gravity.BOTTOM);
+        lp.setMargins(Ui.dp(c, 10), 0, Ui.dp(c, 10), Ui.dp(c, 10));
+        addView(banner, lp);
+        banner.setTranslationY(Ui.dp(c, 120));
+        banner.animate().translationY(0).setDuration(350).start();
     }
 
     // ---------------------------------------------------------------- helpers

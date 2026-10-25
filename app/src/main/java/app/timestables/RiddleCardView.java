@@ -54,6 +54,8 @@ final class RiddleCardView extends FrameLayout {
     private final TextView backFooter;
     private final TextView lockedNote;
     private final SealView seal;
+    /** Compact (sleeping screen) only: where to open a card that's still sealed. */
+    private final TextView sealHint;
     private boolean sealed;
     private boolean answerAvailable;
     private boolean showingBack;
@@ -89,8 +91,14 @@ final class RiddleCardView extends FrameLayout {
         front.addView(f, new LayoutParams(-1, -1));
         seal = new SealView(c);
         seal.setVisibility(GONE);
-        int sealSize = Ui.dp(c, 132);
+        int sealSize = Ui.dp(c, compact ? 86 : 132);
         front.addView(seal, new LayoutParams(sealSize, sealSize, Gravity.CENTER));
+        sealHint = Ui.text(c, 15, Ui.MYSTERY_GOLD, false);
+        sealHint.setText("Open it in your 📒 book");
+        sealHint.setVisibility(GONE);
+        LayoutParams hp = new LayoutParams(-1, -2, Gravity.BOTTOM);
+        hp.bottomMargin = Ui.dp(c, 14);
+        front.addView(sealHint, hp);
         addView(front, new LayoutParams(-1, -1));
 
         back = new FrameLayout(c);
@@ -164,7 +172,7 @@ final class RiddleCardView extends FrameLayout {
      */
     void bind(Riddle r, int number, boolean answerAvailable, boolean sealed) {
         this.answerAvailable = answerAvailable;
-        this.sealed = sealed && !compact;
+        this.sealed = sealed;
         showingBack = false;
         busy = false;
         setRotationY(0);
@@ -183,6 +191,7 @@ final class RiddleCardView extends FrameLayout {
         back.setVisibility(GONE);
         seal.reset();
         seal.setVisibility(this.sealed ? VISIBLE : GONE);
+        sealHint.setVisibility(compact && this.sealed ? VISIBLE : GONE);
         question.setAlpha(this.sealed ? 0f : 1f);
         lockedNote.animate().cancel();
         lockedNote.setAlpha(0f);

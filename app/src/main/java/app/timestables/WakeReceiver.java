@@ -40,6 +40,11 @@ public class WakeReceiver extends BroadcastReceiver {
             AppLog.log(context, "maintenance mode: not waking the screen");
             return;
         }
+        if (session && ParentActivity.open) {
+            // A parent is holding it; a test wake-up still goes through.
+            AppLog.log(context, "parent mode is open: not calling");
+            return;
+        }
         if (session) {
             Settings s = store.settings();
             if (Session.nothingToDo(store.deck(), store.srs(), store.activeCards(), s.newPerDay, now)) {

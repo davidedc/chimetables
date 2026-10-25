@@ -135,7 +135,8 @@ public class CommandReceiver extends BroadcastReceiver {
         BatteryManager bm = context.getSystemService(BatteryManager.class);
         ActivityManager.RunningAppProcessInfo me = new ActivityManager.RunningAppProcessInfo();
         ActivityManager.getMyMemoryState(me);
-        return "deviceOwner=" + Kiosk.isDeviceOwner(context)
+        return "mode=" + (ParentActivity.open ? "PARENT" : KioskActivity.currentMode)
+                + " deviceOwner=" + Kiosk.isDeviceOwner(context)
                 + " lockTask=" + Kiosk.lockTaskStateName(context)
                 + " maintenance=" + store.inMaintenance(now)
                 + " pinSet=" + (store.pinHash() != null)

@@ -28,9 +28,25 @@ Alarms.scheduleNext ──setAlarmClock()──▶ WakeReceiver ──▶ KioskA
   While calling it holds its own screen wake lock and chimes on the alarm stream every 2 minutes,
   up to 5 times. `FLAG_KEEP_SCREEN_ON` isn't used because it proved unreliable on this firmware
   after an alarm wake.
-- **A session in progress wins.** A wake-up that fires while she is answering is ignored. If the
-  screen goes off mid-session (power button, or 3 minutes without a touch), the session is kept
-  in memory, and sliding again within 10 minutes carries on with it rather than starting afresh.
+- **What a wake-up does depends on what she's doing:**
+  - screen off, or the sleeping screen → the normal call
+  - answering cards, the done screen, or the riddle screens → nothing; she carries on
+  - reading her book → no alarm and the book stays open: a soft chime and a "🔔 Time to play!"
+    banner with a Play button at the bottom
+  - parent mode open → scheduled calls are skipped (a test wake-up still goes through)
+- **When the screen goes off, everything lands somewhere sensible:**
+  - mid-play (power button, or 3 minutes without a touch) → the play is kept, and "↩ Carry on"
+    picks it up if she comes back within 10 minutes
+  - the done screen or the riddle screens → the riddle is already saved and stays **sealed**
+    (on the sleeping screen too) until she opens it, there or in her book; an unfinished unlock
+    explainer replays after her next play
+  - parent mode → it closes, so the next person to turn the screen on finds the kiosk
+- **Timeouts:** the call chimes 5 times, 2 minutes apart; a play pauses 3 minutes after the last
+  touch; the done screen sleeps after 6–10 s (60 s when riddles are waiting); the book and the
+  riddle screens after 90 s untouched; the Play/Book buttons go back to the slider after 10 s;
+  parent mode closes after 3 minutes.
+- `scripts/install.sh` asks the app what it is showing first and refuses to update while she's
+  using it (`--force` overrides).
 
 ## Kiosk lock-down
 

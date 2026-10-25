@@ -32,6 +32,8 @@ final class StoryView extends LinearLayout {
         final String next;
         /** Replaces the hint once the card has been opened. */
         String afterHint;
+        /** Runs once when the card is opened (e.g. to remember the seal is broken). */
+        Runnable afterCard;
         /** Optional card she must open (seal or flip) before Next appears. */
         RiddleCardView card;
         /** How long before taps on the card count. */
@@ -152,6 +154,7 @@ final class StoryView extends LinearLayout {
                 if (s.afterHint != null) hint.setText(s.afterHint);
                 if (cardOpened) return;
                 cardOpened = true;
+                if (s.afterCard != null) s.afterCard.run();
                 handler.removeCallbacks(reveal);
                 handler.postDelayed(reveal, AFTER_CARD_MS);
             });

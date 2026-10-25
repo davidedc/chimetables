@@ -30,6 +30,7 @@ public class JsonTest {
         deck.unlockedDay = 20_001;
         deck.unlockSeen = true;
         deck.riddles.add(new Deck.DealtRiddle("abc1", 20_001));
+        deck.riddles.get(0).opened = true;
         Deck back = Json.deckFromJson(Json.deckToJson(deck));
         assertEquals(deck.cards.size(), back.cards.size());
         assertEquals(deck.newDay, back.newDay);
@@ -56,6 +57,7 @@ public class JsonTest {
         assertTrue(back.unlockSeen);
         assertEquals("abc1", back.riddles.get(0).key);
         assertEquals(20_001, back.riddles.get(0).day);
+        assertTrue(back.riddles.get(0).opened);
     }
 
     @Test

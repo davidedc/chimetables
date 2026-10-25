@@ -47,7 +47,9 @@ public final class Json {
             JSONObject badges = new JSONObject();
             for (java.util.Map.Entry<String, Long> e : deck.badges.entrySet()) badges.put(e.getKey(), e.getValue());
             JSONArray riddles = new JSONArray();
-            for (Deck.DealtRiddle r : deck.riddles) riddles.put(new JSONObject().put("key", r.key).put("day", r.day));
+            for (Deck.DealtRiddle r : deck.riddles) {
+                riddles.put(new JSONObject().put("key", r.key).put("day", r.day).put("opened", r.opened));
+            }
             return new JSONObject()
                     .put("version", VERSION)
                     .put("newDay", deck.newDay)
@@ -97,7 +99,9 @@ public final class Json {
         JSONArray riddles = root.optJSONArray("riddles");
         for (int i = 0; riddles != null && i < riddles.length(); i++) {
             JSONObject r = riddles.getJSONObject(i);
-            deck.riddles.add(new Deck.DealtRiddle(r.getString("key"), r.getLong("day")));
+            Deck.DealtRiddle dealt = new Deck.DealtRiddle(r.getString("key"), r.getLong("day"));
+            dealt.opened = r.optBoolean("opened");
+            deck.riddles.add(dealt);
         }
         JSONObject badges = root.optJSONObject("badges");
         if (badges != null) {

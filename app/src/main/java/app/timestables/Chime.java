@@ -50,6 +50,11 @@ public final class Chime {
         play(new double[] {C5, E5, G5, C6, 0, G5, C6, 0, E6, G6, E6, C6}, 0.11, 0.7f);
     }
 
+    /** A wake-up while she's already holding it (reading her book): the call, softly. */
+    public static void nudge() {
+        play(new double[] {C5, E5, G5, C6}, 0.12, 0.35f);
+    }
+
     /** A wax seal cracking open: a quick sparkle up high. */
     public static void shimmer() {
         play(new double[] {G5, C6, E6, G6, C6 * 2}, 0.06, 0.45f);
