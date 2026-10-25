@@ -53,6 +53,8 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 - **Quiet hours** (19:30–07:00) also block playing by hand: no slider at all, just "Zzz…".
 - **No screenshots:** screen capture is turned off for the whole device (device-owner policy), so
   nothing collects in a photo library. `CAPTURE --ez allow true` from the Mac lifts it for checking.
+  Checked on the player: the screenshot key saves nothing and `adb shell screencap` gives an empty
+  file.
 
 ## Status: what was verified on the real device
 
