@@ -43,6 +43,7 @@ public final class Kiosk {
 
     private static final String PREFS = "kiosk";
     private static final String KEY_HIDDEN = "hidden_packages";
+    private static final String KEY_CAPTURE_ALLOWED = "screen_capture_allowed";
 
     private Kiosk() {}
 
@@ -96,6 +97,7 @@ public final class Kiosk {
             notes.add("otaPolicy failed: " + e.getMessage());
         }
         notes.add(applyDisplaySettings(context, s));
+        notes.add("screenCaptureDisabled=" + applyScreenCapture(context));
         tryGlobal(dpm, admin, Global.STAY_ON_WHILE_PLUGGED_IN, "0", notes);
         // No network on this device, so network time can never sync. Auto time stays off and the
         // scripts set the clock from the Mac instead (setTime() refuses while auto time is on).
@@ -112,6 +114,28 @@ public final class Kiosk {
         ComponentName admin = AdminReceiver.component(context);
         dpm.setLockTaskPackages(admin, new String[] {context.getPackageName()});
         dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
+    }
+
+    /**
+     * No screenshots or screen recording on the whole device (they would land in a photo library
+     * anyone with the device could look through). `CAPTURE --ez allow true` from the Mac lifts it
+     * for checking the screens; returns true when capture is now disabled.
+     */
+    public static boolean applyScreenCapture(Context context) {
+        if (!isDeviceOwner(context)) return false;
+        boolean disabled = !prefs(context).getBoolean(KEY_CAPTURE_ALLOWED, false);
+        DevicePolicyManager dpm = dpm(context);
+        ComponentName admin = AdminReceiver.component(context);
+        if (dpm.getScreenCaptureDisabled(admin) != disabled) dpm.setScreenCaptureDisabled(admin, disabled);
+        return disabled;
+    }
+
+    public static String allowScreenCapture(Context context, boolean allow) {
+        if (!isDeviceOwner(context)) return "not device owner";
+        prefs(context).edit().putBoolean(KEY_CAPTURE_ALLOWED, allow).commit();
+        String summary = "screenshots " + (applyScreenCapture(context) ? "blocked" : "allowed");
+        AppLog.log(context, summary);
+        return summary;
     }
 
     /** Maintenance: emptying the whitelist ends lock task immediately. */
@@ -240,6 +264,7 @@ public final class Kiosk {
         dpm.clearPackagePersistentPreferredActivities(admin, context.getPackageName());
         dpm.setKeyguardDisabled(admin, false);
         dpm.setStatusBarDisabled(admin, false);
+        dpm.setScreenCaptureDisabled(admin, false);
         dpm.setSystemUpdatePolicy(admin, null);
         releaseLockTask(context);
         String summary = "cleared restrictions, unhid " + hidden.size() + " apps, released HOME and lock task";

@@ -107,15 +107,67 @@ public class DeckTest {
     public void oneNewStickerADayThenCollectedOnesAgain() {
         Deck deck = new Deck();
         List<String> all = Arrays.asList("a.png", "b.png", "c.png");
-        assertEquals(all, deck.stickerPool(all, 10));
+        List<String> none = Arrays.asList();
+        assertEquals(all, deck.stickerPool(all, none, 10, 3));
         assertTrue(deck.collectSticker("b.png", 10));
-        assertEquals(Arrays.asList("b.png"), deck.stickerPool(all, 10)); // later the same day: repeats only
+        assertEquals(Arrays.asList("b.png"), deck.stickerPool(all, none, 10, 3)); // later the same day: repeats only
         assertTrue(!deck.collectSticker("b.png", 10));
-        assertEquals(Arrays.asList("a.png", "c.png"), deck.stickerPool(all, 11)); // next day: a new one
+        assertEquals(Arrays.asList("a.png", "c.png"), deck.stickerPool(all, none, 11, 3)); // next day: a new one
         deck.collectSticker("a.png", 11);
         deck.collectSticker("c.png", 12);
-        assertEquals(all, deck.stickerPool(all, 13)); // all collected: any of them
-        assertEquals(Arrays.asList(), deck.stickerPool(Arrays.<String>asList(), 13));
+        assertEquals(all, deck.stickerPool(all, none, 13, 3)); // all collected: any of them
+        assertEquals(none, deck.stickerPool(none, none, 13, 3));
+    }
+
+    @Test
+    public void extraStickersOnlyAfterTheUnlockThenEveryFewDays() {
+        Deck deck = new Deck();
+        List<String> starter = Arrays.asList("a.png", "b.png");
+        List<String> more = Arrays.asList("more/x.png", "more/y.png", "more/z.png");
+        deck.collectSticker("a.png", 10);
+        deck.collectSticker("b.png", 11);
+        assertEquals(starter, deck.stickerPool(starter, more, 12, 3)); // locked: the first set only
+        assertTrue(deck.unlockReady(starter));
+        deck.unlockedDay = 11;
+        assertTrue(!deck.unlockReady(starter));
+        assertEquals(starter, deck.stickerPool(starter, more, 11, 3)); // unlock day: a new one was collected already
+        assertEquals(more, deck.stickerPool(starter, more, 12, 3)); // the first extra comes the next day
+        deck.collectSticker("more/y.png", 12);
+        assertEquals(2, deck.stickersLeft(more));
+        List<String> owned = Arrays.asList("a.png", "b.png", "more/y.png");
+        assertEquals(owned, deck.stickerPool(starter, more, 13, 3));
+        assertEquals(owned, deck.stickerPool(starter, more, 14, 3));
+        assertEquals(Arrays.asList("more/x.png", "more/z.png"), deck.stickerPool(starter, more, 15, 3)); // 3 days on
+        assertEquals(Arrays.asList("more/x.png", "more/z.png"), deck.stickerPool(starter, more, 15, 1));
+    }
+
+    @Test
+    public void withoutStickersRiddlesUnlockAfterAWeekOfPractice() {
+        Deck deck = new Deck();
+        List<String> none = Arrays.asList();
+        for (long day = 1; day <= 6; day++) deck.recordSession(day, 5, 5, true, false);
+        assertTrue(!deck.unlockReady(none));
+        deck.recordSession(9, 5, 5, true, false);
+        assertTrue(deck.unlockReady(none));
+    }
+
+    @Test
+    public void oneRiddleADayInBankOrderThenTheOldestAgain() {
+        Deck deck = new Deck();
+        List<Riddle> bank = Arrays.asList(new Riddle("One?", "1", null, 1), new Riddle("Two?", "2", null, 1));
+        assertTrue(!deck.riddleDue(10)); // still locked
+        deck.unlockedDay = 10;
+        assertTrue(deck.riddleDue(10));
+        assertEquals("One?", deck.dealRiddle(bank, 10).question);
+        assertTrue(!deck.riddleDue(10));
+        assertTrue(deck.riddleDue(11));
+        assertEquals("Two?", deck.dealRiddle(bank, 13).question); // missed days don't skip riddles
+        assertEquals("One?", deck.dealRiddle(bank, 14).question); // bank used up: the oldest again
+        assertEquals("Two?", deck.dealRiddle(bank, 15).question);
+        assertEquals("Two?", Deck.findRiddle(bank, deck.riddles.get(1).key).question);
+        assertEquals(null, deck.dealRiddle(Arrays.<Riddle>asList(), 16));
+        deck.reset();
+        assertTrue(deck.riddles.isEmpty() && deck.unlockedDay == 0);
     }
 
     @Test

@@ -12,8 +12,8 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 - [Device setup](docs/device-setup.md): from the box to a locked kiosk, including Developer
   options and USB debugging on the X55 (and the menu **not** to tap)
 - [How it works](docs/how-it-works.md): the wake-up chain, kiosk lock-down, data, test results
-- [Learning design](docs/learning-design.md): session sizes, grading, bonus rounds, and the
-  research behind them
+- [Learning design](docs/learning-design.md): session sizes, grading, bonus rounds, rewards and
+  riddles, and the research behind them
 
 ## How it behaves
 
@@ -30,17 +30,27 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 - **End:** "Well done!", or confetti, a fanfare and a **sticker** when at least 80% were right first
   time or a badge was earned (at most one *new* sticker a day; later ones re-show her collection).
   Then the screen goes off.
+- **Riddles:** collecting the whole first sticker set unlocks riddles, and more stickers. A short
+  explainer introduces them. From then on the first finished session of each day turns over
+  yesterday's riddle card to show the answer, then deals a new card under a wax seal. She just
+  reads it and thinks about it: the app never asks for her answer.
+- **Her book:** a second slider on the sleeping screen ("📒 My book") opens her stickers, every
+  badge (earned with dates, and the ones still to find), a map of every times-table fact coloured
+  by how well she knows it, and all her riddle cards. Look-only: nothing can be earned there.
 - **Stopping halfway:** turning the screen off pauses the session. Sliding again within 10 minutes
   carries on where she left off, mistakes included, so restarting after a wrong answer doesn't buy
   a fresh "perfect" session. A wake-up that comes during a session is ignored.
-- **Sleeping screen** (if the power button is pressed): when the next wake-up is, the current
-  streak and recent badges, and "Slide to play" if cards are due. Playing early uses the same due
-  cards and daily new-card allowance, so a later wake-up just finds less to do (or stays silent).
+- **Sleeping screen** (if the power button is pressed): today's riddle card, when the next wake-up
+  is, her streak, sticker and badge counts, and "Slide to play" if cards are due. Playing early
+  uses the same due cards and daily new-card allowance, so a later wake-up just finds less to do
+  (or stays silent).
 - **Bonus round:** when nothing is due, the slider offers a bonus round instead: up to 5 cards she
   has already met, drawn at random from the least established ones. It is practice only: the
   schedule, streak, badges and stickers are untouched (confetti for a great round, nothing to
   collect), and `reviews.jsonl` marks those answers `"bonus":true`.
-- **Quiet hours** (19:30–07:00) also block playing by hand: no slider at all, just "Zzz…".
+- **Quiet hours** (19:30–07:00) also block playing by hand: no sliders at all, just "Zzz…".
+- **No screenshots:** screen capture is turned off for the whole device (device-owner policy), so
+  nothing collects in a photo library. `CAPTURE --ez allow true` from the Mac lifts it for checking.
 
 ## Status: what was verified on the real device
 
@@ -148,7 +158,7 @@ same key, and a device-owner app can't simply be uninstalled and reinstalled.
 | `settings.sh [json]` | show or change settings |
 | `harden.sh [--yes]` | restrictions: no factory reset (Settings), safe boot, users, installs/uninstalls, accounts, date/time, Bluetooth, crash dialogs. **USB debugging stays on.** |
 | `unharden.sh [--keep-owner] [--yes]` | emergency undo (see Recovery) |
-| `logs.sh [lines\|--follow]` | pulls `app.log` (wakes, beeps, sessions) and `reviews.jsonl` into `logs/` |
+| `logs.sh [lines\|--follow]` | pulls `app.log` (wakes, beeps, sessions) and `reviews.jsonl` into `logs/`; prints the device state and her collection, and says when the extra stickers are running out |
 | `sync-time.sh` | sets the device clock from the Mac |
 
 Under the hood the scripts talk to the app through `CommandReceiver`, an adb-only broadcast receiver
@@ -194,13 +204,30 @@ A streak counts days with at least one finished session; it isn't broken until a
 Celebration screens can show a sticker with a line under it. Stickers are personal pictures, so they
 live in **`family-assets/stickers/`, which is git-ignored** and only bundled into your local build:
 
-- put PNG/JPG/WebP files there (about 360 px, transparent background looks best)
-- `family-assets/stickers/phrases.txt` maps each file to its line: `wow.png: Wow!! Amazing!`
+- the **first set** goes straight in `family-assets/stickers/` (we use 9). She collects these with a
+  count ("🖼️ New sticker! 4 of 9"), and completing the set unlocks riddles
+- the **extra stickers** go in `family-assets/stickers/more/`. They join after the unlock with no
+  total shown, so the collection just keeps growing and finishing it isn't a goal in itself
+- PNG/JPG/WebP, about 300–360 px, transparent background with a white sticker border looks best
+- `family-assets/stickers/phrases.txt` maps each file to its line: `wow.png: Wow!! Amazing!`,
+  `more/cap.png: Hats off to you!`
 - rebuild and install: `scripts/build.sh release && scripts/install.sh release`
 
-One sticker appears per celebration. At most one a day is new ("🖼️ New sticker! 4 of 9"); other
-celebrations that day re-show one she already has. The sleeping screen shows the collection (🖼️ 4 of 9). With the folder empty or missing the app uses emoji instead.
+One sticker appears per celebration. Before the unlock at most one a day is new; after it the first
+extra sticker comes the next day, then a new one at most every 3 days (`newStickerEveryDays`), and
+other celebrations re-show ones she has. `scripts/logs.sh` says when fewer than 4 new ones are left.
+With no stickers at all the app uses emoji, and riddles unlock after 7 days of practice instead.
 Back this folder up along with `keystore/`.
+
+## Riddles
+
+`app/src/main/assets/riddles.txt` holds 100+ riddles in the order she gets them: classic riddles
+and number riddles she can work out in her head, each with an answer and sometimes a "did you
+know?" for the back of the card. The format is in the file's header. Your own riddles (family
+jokes and so on) can go in the git-ignored `family-assets/riddles-family.txt`, same format; one is
+mixed in after every four. Progress remembers riddles by their question, so the list can be
+edited or reordered later without her getting one twice. When the list runs out it starts again
+from the riddle she had longest ago.
 
 ## Recovery and unlocking
 
@@ -248,6 +275,8 @@ Not proven yet on the real device:
 - **The 10-minute limit for carrying on a session** wasn't waited out live (a simple elapsed-time check).
 - **Parent mode on the device's own screen** hasn't been reviewed, as it needs the parent's PIN.
 - **Long-term badges** (30-day streak, everything mastered) are covered only by the JVM tests.
+- **Riddles and the book** were walked through on the emulator (unlock, first riddle, next day's
+  answer, book pages). On the player, her first real unlock is still to come.
 - **A determined child:** only the escape routes in G3 were tried. A hardware factory reset through
   recovery can't be blocked by any app.
 
@@ -256,13 +285,15 @@ Not proven yet on the real device:
 ```
 app/src/main/java/app/timestables/
   core/            pure Java: Srs (scheduler), Answer (grading), Session, Deck, Badges, WakePlanner,
-                   Settings, Json, PinHasher
+                   Settings, Json, PinHasher, Riddle
   KioskActivity    the child's screen          ParentActivity  PIN-protected settings
+  StoryView, RiddleCardView, RiddleBank        unlock explainer, riddle cards (seal, flip), the list
+  BookView, TablesMapView                      her book
   Alarms, WakeReceiver, SystemEventsReceiver   wake-ups and rescheduling
   Kiosk, Maintenance, AdminReceiver            device-owner policy
   CommandReceiver  adb commands for scripts/   Stickers, Chime, ConfettiView, SlideToStart, PinPad, Ui
 devopts/           helper APK to open Developer options
-family-assets/     (git-ignored) personal stickers bundled into local builds
+family-assets/     (git-ignored) personal stickers (and optional riddles) bundled into local builds
 scripts/           build/install/provision/harden/unharden/logs/...
 ```
 

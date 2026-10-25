@@ -1,0 +1,503 @@
+# Riddle cards, one a day in this order (see docs/learning-design.md#riddles).
+# Q: the question (front of the card), A: the answer (back), F: optional "did you know?" for the back,
+# L: difficulty 1-3 (magnifying glasses). Blank line between riddles. A line with no tag continues the
+# one above. Classic folk riddles, and number riddles that can be worked out in your head.
+# Your own riddles go in family-assets/riddles-family.txt (same format, never committed).
+
+Q: What has keys but can't open locks?
+A: A piano!
+L: 1
+
+Q: What gets wetter the more it dries?
+A: A towel.
+L: 1
+
+Q: Multiply me by myself, then add me, and you get 42. Who am I?
+A: 6
+F: 6 × 6 = 36, and 36 + 6 = 42.
+L: 2
+
+Q: What has hands but can't clap?
+A: A clock.
+L: 1
+
+Q: The more you take, the more you leave behind. What are they?
+A: Footsteps.
+L: 2
+
+Q: I'm a number. Take away my first letter and I become even. Who am I?
+A: Seven!
+F: S-EVEN: seven is odd, but "even" is hiding inside it.
+L: 1
+
+Q: What has a neck but no head?
+A: A bottle.
+L: 1
+
+Q: What can you catch but not throw?
+A: A cold!
+L: 1
+
+Q: Multiply together all the numbers on your keypad. What do you get?
+A: 0
+F: The keypad has a 0 on it, and anything times 0 is 0.
+L: 1
+
+Q: What has an eye but can't see?
+A: A needle.
+L: 1
+
+Q: What goes up but never comes down?
+A: Your age!
+L: 1
+
+Q: What number comes next?
+1, 4, 9, 16, 25, …
+A: 36
+F: They're the square numbers: 1 × 1, 2 × 2, 3 × 3, 4 × 4, 5 × 5… and 6 × 6 = 36.
+L: 1
+
+Q: What can travel all around the world while staying in a corner?
+A: A stamp!
+L: 2
+
+Q: What has a head and a tail but no body?
+A: A coin.
+L: 1
+
+Q: I'm in the 3 times table and the 4 times table, and I'm between 20 and 30. Who am I?
+A: 24
+F: Numbers in both the 3 and the 4 times tables are all in the 12 times table: 12, 24, 36…
+L: 1
+
+Q: What belongs to you, but other people use it more than you do?
+A: Your name.
+L: 2
+
+Q: What is full of holes but still holds water?
+A: A sponge.
+L: 1
+
+Q: How many legs are there on 3 dogs, 2 birds and a goldfish?
+A: 16
+F: 3 × 4 = 12 dog legs, 2 × 2 = 4 bird legs, and a goldfish has none!
+L: 1
+
+Q: I'm tall when I'm young and short when I'm old. What am I?
+A: A candle.
+L: 1
+
+Q: Some months have 31 days and some have 30. How many have 28 days?
+A: All 12 of them!
+F: Every month has at least 28 days.
+L: 1
+
+Q: Pick any answer in the 9 times table up to 90 and add its two digits together. What do you always get?
+A: 9
+F: 18 → 1 + 8, 27 → 2 + 7, 45 → 4 + 5… Each time the tens go up by one, the units go down by one.
+L: 1
+
+Q: What has lots of teeth but can't bite?
+A: A comb.
+L: 1
+
+Q: What runs but never walks, and has a mouth but never talks?
+A: A river.
+L: 2
+
+Q: I'm a square number between 50 and 70. Who am I?
+A: 64
+F: 8 × 8 = 64. It's also 4 × 4 × 4, so it's a cube number too!
+L: 1
+
+Q: What can you break without ever touching it?
+A: A promise.
+L: 2
+
+Q: What has a spine but no bones?
+A: A book.
+L: 1
+
+Q: A farmer has some chickens and some cows. Together they have 10 heads and 28 legs. How many cows are there?
+A: 4 cows
+(and 6 chickens)
+F: If all 10 were chickens there would be 20 legs. Each cow adds 2 more legs, and 8 extra legs means 4 cows.
+L: 2
+
+Q: What kind of band never plays any music?
+A: A rubber band.
+L: 1
+
+Q: What has legs but can't walk?
+A: A table.
+L: 1
+
+Q: In a race, you overtake the person in second place. What place are you in now?
+A: Second!
+F: You took their place, so whoever is first is still ahead of you.
+L: 1
+
+Q: What can fill a room but takes up no space?
+A: Light.
+L: 2
+
+Q: If you drop me I'm sure to crack, but smile at me and I'll always smile back. What am I?
+A: A mirror.
+L: 1
+
+Q: I'm the smallest number in the 2, 3, 4, 5 and 6 times tables. Who am I?
+A: 60
+F: 60 can be shared out in lots of ways, which is one reason there are 60 minutes in an hour.
+L: 2
+
+Q: What gets bigger the more you take away from it?
+A: A hole.
+L: 2
+
+Q: What has four wheels and flies?
+A: A bin lorry!
+F: All those flies buzzing round it…
+L: 2
+
+Q: You've had a cake with the right number of candles on every birthday from 1 to 10. How many candles is that altogether?
+A: 55
+F: Pair them up: 1 + 10, 2 + 9, 3 + 8, 4 + 7, 5 + 6. Five pairs of 11 make 55. A boy called Gauss added 1 to 100 like this: 50 pairs of 101 = 5050.
+L: 2
+
+Q: What word is spelled wrong in every dictionary?
+A: "Wrong"!
+L: 2
+
+Q: What starts with T, ends with T, and has T in it?
+A: A teapot!
+L: 2
+
+Q: A brick weighs 1 kg plus half a brick. How much does the whole brick weigh?
+A: 2 kg
+F: If 1 kg and half a brick make a whole brick, the 1 kg must be the other half.
+L: 2
+
+Q: Where does today come before yesterday?
+A: In the dictionary!
+L: 2
+
+Q: What has 13 hearts, but none of them beat?
+A: A pack of cards.
+F: There are 13 cards in the hearts suit.
+L: 2
+
+Q: 37 × 3 = 111.
+Can you work out 37 × 6 without a big sum?
+A: 222
+F: 37 × 6 is double 37 × 3, so it's double 111. And 37 × 9 = 333, 37 × 12 = 444…
+L: 2
+
+Q: Forwards I'm heavy, but backwards I'm not. What am I?
+A: A ton!
+F: Backwards, T-O-N spells N-O-T.
+L: 2
+
+Q: What has one head, one foot and four legs?
+A: A bed.
+L: 2
+
+Q: Sam is 4 and his sister is 3 times his age. When Sam is 12, how old will his sister be?
+A: 20, not 36!
+F: She's 12 now, 8 years older than Sam, and she'll always be 8 years older.
+L: 2
+
+Q: I shave every day, but my beard stays the same. Who am I?
+A: A barber.
+L: 2
+
+Q: What is so fragile that saying its name breaks it?
+A: Silence.
+L: 2
+
+Q: A snail climbs a 10-metre wall. Every day it climbs up 3 m, and every night it slips back 2 m. How many days does it take to reach the top?
+A: 8 days
+F: After 7 days and 7 nights it's at 7 m. On day 8 it climbs 3 m and reaches the top before it can slip back!
+L: 2
+
+Q: I have cities but no houses, forests but no trees, and water but no fish. What am I?
+A: A map!
+L: 2
+
+Q: What can't talk, but answers when you speak to it?
+A: An echo.
+L: 2
+
+Q: How many times do you write the digit 7 when you write every number from 1 to 100?
+A: 20
+F: 10 times in the units (7, 17, 27 … 97) and 10 times in the tens (70 to 79). 77 has two!
+L: 2
+
+Q: What kind of room has no doors or windows?
+A: A mushroom!
+L: 1
+
+Q: Which letter of the alphabet has the most water?
+A: C
+(the sea!)
+L: 1
+
+Q: 11 × 12 = 132
+11 × 13 = 143
+11 × 14 = 154
+Spot the trick, then work out 11 × 26.
+A: 286
+F: Split the two digits apart and put their total in the middle: 2 and 6, with 2 + 6 = 8 in between, makes 286.
+L: 2
+
+Q: What goes up when the rain comes down?
+A: An umbrella.
+L: 1
+
+Q: What do you call a bear with no teeth?
+A: A gummy bear!
+L: 1
+
+Q: Mr and Mrs Smith have 6 daughters, and each daughter has 1 brother. How many people are in the Smith family?
+A: 9
+F: The daughters all share the same brother: 6 daughters + 1 son + 2 parents = 9.
+L: 2
+
+Q: Feed me and I grow, but give me a drink and I go out. What am I?
+A: Fire.
+L: 2
+
+Q: What can you see once in a minute, twice in a moment, but never in a thousand years?
+A: The letter M!
+L: 3
+
+Q: 5 friends meet, and everyone shakes hands once with everyone else. How many handshakes is that?
+A: 10
+F: The first friend shakes 4 hands, the next shakes 3 new ones, then 2, then 1: 4 + 3 + 2 + 1 = 10.
+L: 2
+
+Q: A girl fell off a 6-metre ladder but didn't get hurt. How?
+A: She fell off the bottom step!
+L: 2
+
+Q: What has lots of letters inside, but never reads any of them?
+A: A postbox.
+L: 1
+
+Q: A drawer has 10 red socks and 10 blue socks, all mixed up. In the dark, how many socks must you take out to be sure of a matching pair?
+A: 3
+F: With 3 socks, at least two of them must be the same colour.
+L: 2
+
+Q: What is in seasons, seconds, centuries and minutes, but not in decades, years or days?
+A: The letter N!
+L: 3
+
+Q: What is easy to get into but hard to get out of?
+A: Trouble!
+L: 2
+
+Q: Which three different whole numbers give the same answer when you add them together and when you multiply them together?
+A: 1, 2 and 3
+F: 1 + 2 + 3 = 6 and 1 × 2 × 3 = 6.
+L: 2
+
+Q: Which travels faster, heat or cold?
+A: Heat, because you can catch a cold!
+L: 2
+
+Q: I have keys but no locks, and space but no room. You can enter, but you can't go outside. What am I?
+A: A keyboard!
+L: 2
+
+Q: Think of a number, double it and add 6. You get 20. What was the number?
+A: 7
+F: Work backwards: 20 − 6 = 14, and half of 14 is 7.
+L: 1
+
+Q: What can you put in a bucket to make it lighter?
+A: A hole!
+L: 2
+
+Q: What's orange and sounds like a parrot?
+A: A carrot!
+L: 1
+
+Q: What comes next?
+2, 3, 5, 8, 12, …
+A: 17
+F: The gaps grow by one each time: +1, +2, +3, +4, then +5.
+L: 2
+
+Q: Which is heavier, a kilo of feathers or a kilo of bricks?
+A: Neither: they both weigh a kilo!
+L: 1
+
+Q: What can be cracked, made, told and played?
+A: A joke!
+L: 2
+
+Q: I'm a two-digit number. My tens digit is double my units digit, and my two digits add up to 9. Who am I?
+A: 63
+F: 6 is double 3, and 6 + 3 = 9. 63 is also 7 × 9.
+L: 2
+
+Q: What has to be broken before you can use it?
+A: An egg.
+L: 1
+
+Q: What has lots of eyes but can't see?
+A: A potato!
+L: 2
+
+Q: A bat and a ball cost £1.10 together. The bat costs £1 more than the ball. How much is the ball?
+A: 5p
+F: Not 10p! Then the bat would be £1.10, and both would cost £1.20. With a 5p ball the bat is £1.05: £1.10 together.
+L: 3
+
+Q: I'm as light as a feather, but even the strongest person can't hold me for five minutes. What am I?
+A: Your breath.
+L: 2
+
+Q: What do you throw away when you need it, and take back when you don't?
+A: An anchor.
+L: 3
+
+Q: 6 × 7 = 42.
+So what's 60 × 70?
+A: 4200
+F: 60 × 70 is 6 × 7 × 10 × 10, which is 42 × 100.
+L: 2
+
+Q: What four-letter word reads the same forwards, backwards and upside down?
+A: NOON
+F: Turn the word NOON upside down and it still says NOON!
+L: 3
+
+Q: What's at the end of everything?
+A: The letter G!
+L: 2
+
+Q: If two's company and three's a crowd, what are four and five?
+A: Nine!
+L: 1
+
+Q: What runs all the way around a garden without moving?
+A: A fence.
+L: 2
+
+Q: What has a bottom at the top?
+A: Your legs!
+F: Your bottom is at the top of them.
+L: 2
+
+Q: I add 5 to 9 and get 2. When is that right?
+A: On a clock!
+F: 5 hours after 9 o'clock it's 2 o'clock.
+L: 2
+
+Q: What tastes better than it smells?
+A: Your tongue!
+L: 2
+
+Q: What can you hold in your left hand, but never in your right hand?
+A: Your right elbow!
+F: Go on, try it…
+L: 2
+
+Q: A spider has 8 legs and a beetle has 6. In a box there are 5 of them, with 34 legs altogether. How many spiders are there?
+A: 2 spiders
+(and 3 beetles)
+F: 2 × 8 = 16 and 3 × 6 = 18, and 16 + 18 = 34.
+L: 2
+
+Q: What five-letter word gets shorter when you add two letters to it?
+A: Short!
+F: Short + er = shorter.
+L: 2
+
+Q: What has a ring but no finger?
+A: A telephone.
+L: 1
+
+Q: A clock takes 5 seconds to strike 6 o'clock. How long does it take to strike 12 o'clock?
+A: 11 seconds
+F: Count the gaps, not the bongs: 6 bongs have 5 gaps of 1 second, and 12 bongs have 11 gaps.
+L: 3
+
+Q: What building has the most stories?
+A: A library!
+L: 1
+
+Q: What goes through towns and fields but never moves?
+A: A road.
+L: 2
+
+Q: Using only adding, how can you make 1000 with eight 8s?
+A: 888 + 88 + 8 + 8 + 8
+F: 888 + 88 = 976, and three more 8s make 1000.
+L: 3
+
+Q: What invention lets you see right through walls?
+A: A window!
+L: 1
+
+Q: How many squares are there on a noughts-and-crosses board?
+A: 14
+F: 9 small squares, 4 middle-sized ones (2 by 2) and 1 big one: 9 + 4 + 1 = 14.
+L: 3
+
+Q: What is always in front of you but can't be seen?
+A: The future.
+L: 2
+
+Q: Which number in the 7 times table under 100 is written with two 7s?
+A: 77
+F: 77 = 7 × 11.
+L: 1
+
+Q: What has a thumb and four fingers but isn't alive?
+A: A glove.
+L: 1
+
+Q: Which number has as many letters as its value?
+A: Four!
+F: F-O-U-R has 4 letters.
+L: 1
+
+Q: In the 8 times table, look at the last digit of each answer:
+8, 16, 24, 32, 40, …
+What pattern do you see?
+A: 8, 6, 4, 2, 0
+and then it starts again!
+F: 48, 56, 64, 72 and 80 end in 8, 6, 4, 2, 0 too.
+L: 1
+
+Q: Divide 30 by a half, then add 10. What do you get?
+A: 70
+F: Dividing by a half means "how many halves are there in 30?": there are 60. Then 60 + 10 = 70.
+L: 3
+
+Q: I'm in the 5 times table and the 6 times table, and I'm between 70 and 100. Who am I?
+A: 90
+F: Numbers in both tables are all in the 30 times table: 30, 60, 90…
+L: 2
+
+Q: A triangle, a square and a pentagon: how many corners do they have altogether?
+A: 12
+F: 3 + 4 + 5 = 12.
+L: 1
+
+Q: What is the only number whose letters are in alphabetical order?
+A: Forty!
+F: F, O, R, T, Y: each letter comes later in the alphabet than the one before.
+L: 3
+
+Q: Half of a number is 4 more than a quarter of it. What's the number?
+A: 16
+F: Half of 16 is 8 and a quarter of 16 is 4, and 8 is 4 more than 4.
+L: 3
+
+Q: There are 6 apples and you take away 4. How many do you have?
+A: 4
+(the ones you took!)
+L: 1

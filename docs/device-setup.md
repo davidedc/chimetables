@@ -106,8 +106,10 @@ experimenting it has an extra escape hatch: its device owner can be removed with
 `adb shell dpm remove-active-admin app.timestables/.AdminReceiver`. Either variant installs over
 the other, keeping progress.
 
-Optional: put personal sticker pictures in `family-assets/stickers/` before building (see
-[Stickers](../README.md#stickers)).
+Optional: put personal sticker pictures in `family-assets/stickers/` (the first set) and
+`family-assets/stickers/more/` (extras that come after the unlock), and your own riddles in
+`family-assets/riddles-family.txt`, before building (see [Stickers](../README.md#stickers) and
+[Riddles](../README.md#riddles)).
 
 ## 6. Install it
 
@@ -204,6 +206,9 @@ lifts the block for an update and puts it back afterwards.
   resyncs it, or run `scripts/sync-time.sh`. Summer and winter time switch by themselves: the time
   zone rules are on the device.
 - **Progress and answer history:** `scripts/logs.sh` saves `reviews.jsonl`, one line per answer.
+- **Stickers running out:** after the unlock a new extra sticker turns up at most every 3 days.
+  `scripts/logs.sh` warns when fewer than 4 are left; add pictures to `family-assets/stickers/more/`
+  and update the app.
 
 ## Undoing it
 

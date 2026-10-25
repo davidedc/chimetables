@@ -21,9 +21,11 @@ import java.util.Random;
 
 /**
  * Optional celebration stickers from the APK's assets/stickers/ folder, which the build fills from
- * the git-ignored family-assets/stickers/ (personal photos never go into the repository). Lines in
- * stickers/phrases.txt map a file to what is shown under it: {@code wow.png: Wow!! Amazing!}.
- * With no stickers the celebration uses emoji.
+ * the git-ignored family-assets/stickers/ (personal photos never go into the repository). The
+ * pictures directly in that folder are the first set: collecting all of them unlocks riddles and the
+ * extra stickers in stickers/more/. Lines in stickers/phrases.txt map a file to what is shown under
+ * it: {@code wow.png: Wow!! Amazing!} or {@code more/cap.png: Cool!}. With no stickers the
+ * celebration uses emoji.
  */
 final class Stickers {
     static final class Sticker {
@@ -39,19 +41,30 @@ final class Stickers {
     }
 
     private static final String DIR = "stickers";
+    private static final String MORE = "more";
     private static final List<String> DEFAULT_PHRASES = Arrays.asList("Superstar!", "You did it!", "Amazing work!");
     private static final Random RANDOM = new Random();
 
     private Stickers() {}
 
-    static List<String> all(Context context) {
+    /** The first set (unlocks riddles when complete). */
+    static List<String> starter(Context context) {
+        return list(context, DIR, "");
+    }
+
+    /** The extra stickers that join after the unlock, named "more/…". */
+    static List<String> more(Context context) {
+        return list(context, DIR + "/" + MORE, MORE + "/");
+    }
+
+    private static List<String> list(Context context, String dir, String prefix) {
         List<String> names = new ArrayList<>();
         try {
-            String[] files = context.getAssets().list(DIR);
+            String[] files = context.getAssets().list(dir);
             if (files != null) {
                 for (String f : files) {
                     String lower = f.toLowerCase(java.util.Locale.ROOT);
-                    if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".webp")) names.add(f);
+                    if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".webp")) names.add(prefix + f);
                 }
             }
         } catch (IOException ignored) {
@@ -61,22 +74,31 @@ final class Stickers {
         return names;
     }
 
-    /** A sticker she hasn't collected yet if possible, else any; null if none are bundled. */
-    /** A sticker for a celebration: a new one at most once a day (see {@link Deck#stickerPool}). */
-    static Sticker pick(Context context, Deck deck, long today) {
-        List<String> pool = deck.stickerPool(all(context), today);
+    /** A sticker for a celebration: a new one when one is allowed today (see {@link Deck#stickerPool}). */
+    static Sticker pick(Context context, Deck deck, long today, int everyDays) {
+        List<String> pool = deck.stickerPool(starter(context), more(context), today, everyDays);
         if (pool.isEmpty()) return null;
         String name = pool.get(RANDOM.nextInt(pool.size()));
+        Bitmap bitmap = load(context, name, 1);
+        if (bitmap == null) return null;
+        return new Sticker(name, bitmap, phrase(context, name));
+    }
+
+    /** Decodes a sticker, {@code sample} times smaller in each direction (1 = full size); null if unreadable. */
+    static Bitmap load(Context context, String name, int sample) {
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inSampleSize = sample;
         try (InputStream in = context.getAssets().open(DIR + "/" + name)) {
-            Bitmap bitmap = BitmapFactory.decodeStream(in);
-            if (bitmap == null) return null;
-            String phrase = phrases(context).get(name);
-            if (phrase == null) phrase = DEFAULT_PHRASES.get(RANDOM.nextInt(DEFAULT_PHRASES.size()));
-            return new Sticker(name, bitmap, phrase);
+            return BitmapFactory.decodeStream(in, null, opts);
         } catch (IOException e) {
             AppLog.log(context, "sticker " + name + " unreadable: " + e);
             return null;
         }
+    }
+
+    static String phrase(Context context, String name) {
+        String phrase = phrases(context).get(name);
+        return phrase != null ? phrase : DEFAULT_PHRASES.get(RANDOM.nextInt(DEFAULT_PHRASES.size()));
     }
 
     private static Map<String, String> phrases(Context context) {

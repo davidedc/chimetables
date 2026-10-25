@@ -54,6 +54,19 @@ final class SlideToStart extends View {
         invalidate();
     }
 
+    /** Track and fill colours (the arrow uses the fill colour). */
+    void setColors(int track, int fill) {
+        trackPaint.setColor(track);
+        fillPaint.setColor(fill);
+        arrowPaint.setColor(fill);
+        invalidate();
+    }
+
+    void setLabelSize(float px) {
+        labelPaint.setTextSize(px);
+        invalidate();
+    }
+
     void setListener(Listener l) {
         listener = l;
     }

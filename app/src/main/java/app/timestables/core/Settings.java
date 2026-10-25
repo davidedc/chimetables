@@ -25,4 +25,6 @@ public final class Settings {
     /** 0-255; applied as a fixed (non-adaptive) brightness. */
     public int brightness = 110;
     public int screenTimeoutSeconds = 30;
+    /** Once riddles are unlocked, a new sticker turns up at most every this many days. */
+    public int newStickerEveryDays = 3;
 }

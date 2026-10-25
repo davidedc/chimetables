@@ -36,6 +36,28 @@ public final class Deck {
     public final Set<String> stickers = new java.util.LinkedHashSet<>();
     /** Local day number when the last new sticker was collected: one new sticker a day. */
     public long stickerDay;
+    /**
+     * Local day number when the first sticker set was completed, which unlocks riddles and more
+     * stickers (0 = not yet).
+     */
+    public long unlockedDay;
+    /** True once she has seen the "you unlocked riddles" screens through to her first riddle. */
+    public boolean unlockSeen;
+    /** Riddles dealt so far, oldest first. The last one is today's (or the latest): its answer is still hidden. */
+    public final List<DealtRiddle> riddles = new ArrayList<>();
+
+    /** Practice days needed to unlock riddles when no stickers are bundled. */
+    static final int UNLOCK_DAYS_WITHOUT_STICKERS = 7;
+
+    public static final class DealtRiddle {
+        public final String key;
+        public final long day;
+
+        public DealtRiddle(String key, long day) {
+            this.key = key;
+            this.day = day;
+        }
+    }
 
     public static final class DayStats {
         public int sessions;
@@ -186,15 +208,82 @@ public final class Deck {
     }
 
     /**
-     * The stickers a celebration may show: ones not collected yet, but only if no new one was
-     * collected today (one a day keeps them special); otherwise the collected ones again.
+     * The stickers a celebration may show: ones not collected yet when a new one is allowed today,
+     * otherwise the collected ones again. Before the unlock only the first set counts, one new sticker
+     * a day. After it the extra stickers join: the first one the next day, then one every
+     * {@code everyDays} days, so they stay special and the parent's supply lasts.
      */
-    public List<String> stickerPool(List<String> available, long today) {
+    public List<String> stickerPool(List<String> starter, List<String> more, long today, int everyDays) {
+        List<String> available = new ArrayList<>(starter);
+        if (unlockedDay > 0) available.addAll(more);
+        boolean extrasOwned = false;
+        for (String name : more) extrasOwned |= stickers.contains(name);
+        int gap = unlockedDay > 0 && extrasOwned ? Math.max(1, everyDays) : 1;
+        boolean newAllowed = stickerDay == 0 || today - stickerDay >= gap;
         List<String> fresh = new ArrayList<>();
         List<String> owned = new ArrayList<>();
         for (String name : available) (stickers.contains(name) ? owned : fresh).add(name);
-        if (!fresh.isEmpty() && (stickerDay != today || owned.isEmpty())) return fresh;
+        if (!fresh.isEmpty() && (newAllowed || owned.isEmpty())) return fresh;
         return owned.isEmpty() ? fresh : owned;
+    }
+
+    /** Extra stickers not collected yet (for the parent's status line). */
+    public int stickersLeft(List<String> more) {
+        int n = 0;
+        for (String name : more) if (!stickers.contains(name)) n++;
+        return n;
+    }
+
+    /**
+     * True when riddles should unlock now: every sticker of the first set collected, or, with no
+     * stickers bundled, {@link #UNLOCK_DAYS_WITHOUT_STICKERS} days of practice.
+     */
+    public boolean unlockReady(List<String> starter) {
+        if (unlockedDay > 0) return false;
+        if (starter.isEmpty()) return practiceDays() >= UNLOCK_DAYS_WITHOUT_STICKERS;
+        return stickers.containsAll(starter);
+    }
+
+    public int practiceDays() {
+        int n = 0;
+        for (DayStats d : days.values()) if (d.sessions > 0) n++;
+        return n;
+    }
+
+    /** True when riddles are unlocked and none has been dealt today yet: the next finished session deals one. */
+    public boolean riddleDue(long today) {
+        return unlockedDay > 0 && (riddles.isEmpty() || riddles.get(riddles.size() - 1).day != today);
+    }
+
+    /**
+     * Deals the next riddle: the first one in the bank she hasn't had, or once she has had them all,
+     * the one she had longest ago. Null if the bank is empty.
+     */
+    public Riddle dealRiddle(List<Riddle> bank, long today) {
+        if (bank.isEmpty()) return null;
+        Map<String, Integer> lastDealt = new java.util.HashMap<>();
+        for (int i = 0; i < riddles.size(); i++) lastDealt.put(riddles.get(i).key, i);
+        Riddle pick = null;
+        int oldest = Integer.MAX_VALUE;
+        for (Riddle r : bank) {
+            Integer at = lastDealt.get(r.key());
+            if (at == null) {
+                pick = r;
+                break;
+            }
+            if (at < oldest) {
+                oldest = at;
+                pick = r;
+            }
+        }
+        riddles.add(new DealtRiddle(pick.key(), today));
+        return pick;
+    }
+
+    /** The riddle with this key, or null if it is no longer in the bank. */
+    public static Riddle findRiddle(List<Riddle> bank, String key) {
+        for (Riddle r : bank) if (r.key().equals(key)) return r;
+        return null;
     }
 
     /** Records a sticker shown on a celebration; true if it is new to the collection. */
@@ -214,6 +303,9 @@ public final class Deck {
         fastRunBest = 0;
         stickers.clear();
         stickerDay = 0;
+        unlockedDay = 0;
+        unlockSeen = false;
+        riddles.clear();
     }
 
     /** Parent-mode summary for a set of cards. */

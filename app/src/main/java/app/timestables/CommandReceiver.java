@@ -30,6 +30,7 @@ import java.util.List;
  *   SETTINGS [--es json '{"tables":[2,3],"wakeTimes":["07:45"]}']   show, or merge and apply
  *   SET_TIME --el millis <epoch ms>        (auto time is switched off)
  *   RESTRICT --es add|clear no_safe_boot
+ *   CAPTURE --ez allow true|false          screenshots (blocked unless allowed)
  *   SCHEDULE | BEEP | RESET_PROGRESS
  * </pre>
  */
@@ -107,6 +108,9 @@ public class CommandReceiver extends BroadcastReceiver {
                 if (clear != null) return Kiosk.restrict(context, clear, false);
                 return "ERROR --es add|clear <restriction> required";
             }
+            case "CAPTURE":
+                if (!intent.hasExtra("allow")) return "ERROR --ez allow true|false required";
+                return Kiosk.allowScreenCapture(context, intent.getBooleanExtra("allow", false));
             case "SCHEDULE":
                 return "next wake " + Alarms.format(Alarms.scheduleNext(context, "adb"));
             case "BEEP":
@@ -138,12 +142,16 @@ public class CommandReceiver extends BroadcastReceiver {
                 + " nextWake=" + Alarms.format(store.nextWake()).replace(' ', '_')
                 + " cards=" + active.size() + " due=" + stats.due + " unseen=" + stats.unseen
                 + " sessionSize=" + s.sessionSize + " times=" + s.wakeTimes
+                + " stickers=" + store.deck().stickers.size() + " newStickersLeft=" + store.deck().stickersLeft(Stickers.more(context))
+                + " riddles=" + (store.deck().unlockedDay > 0 ? store.deck().riddles.size() + "/" + RiddleBank.get(context).size() : "locked")
                 + " alarmVol=" + am.getStreamVolume(AudioManager.STREAM_ALARM) + "/" + am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
                 + " screenOn=" + pm.isInteractive()
                 + " ignoringBatteryOpt=" + pm.isIgnoringBatteryOptimizations(context.getPackageName())
                 + " battery=" + bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) + "%"
                 + " importance=" + me.importance
                 + " restrictions=" + Kiosk.activeRestrictions(context)
+                + " screenshots=" + (Kiosk.isDeviceOwner(context)
+                        && Kiosk.dpm(context).getScreenCaptureDisabled(AdminReceiver.component(context)) ? "blocked" : "allowed")
                 + " hidden=" + Kiosk.hiddenPackages(context).size();
     }
 }

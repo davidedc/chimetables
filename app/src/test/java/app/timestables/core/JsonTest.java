@@ -27,6 +27,9 @@ public class JsonTest {
         deck.fastRunBest = 7;
         deck.collectSticker("wow.png", 20_000);
 
+        deck.unlockedDay = 20_001;
+        deck.unlockSeen = true;
+        deck.riddles.add(new Deck.DealtRiddle("abc1", 20_001));
         Deck back = Json.deckFromJson(Json.deckToJson(deck));
         assertEquals(deck.cards.size(), back.cards.size());
         assertEquals(deck.newDay, back.newDay);
@@ -49,6 +52,10 @@ public class JsonTest {
         assertEquals(7, back.fastRunBest);
         assertTrue(back.stickers.contains("wow.png"));
         assertEquals(20_000, back.stickerDay);
+        assertEquals(20_001, back.unlockedDay);
+        assertTrue(back.unlockSeen);
+        assertEquals("abc1", back.riddles.get(0).key);
+        assertEquals(20_001, back.riddles.get(0).day);
     }
 
     @Test

@@ -58,10 +58,36 @@ The details are in [the scheduler](../README.md#the-scheduler-child-tuned-sm-2).
 - A sticker and confetti for a session with at least 80% right first time, or for a new badge.
   Only the first such sticker each day is a new one for her collection; later ones re-show stickers
   she has. Without that limit she collected 7 of 9 on her first day.
+- **Completing the first set unlocks something, not a prize.** She wanted to know what happens at
+  9 of 9. The answer is riddles, plus more stickers, rather than a present: the reward stays
+  inside the app, and nothing real is tied to how she does. After the unlock no total is shown, so
+  "collecting them all" stops being a finish line. New extra stickers come at most every 3 days,
+  because the daily treat is now the riddle.
 - Badges for streaks, perfect sessions, mornings, answering every call in a day, runs of quick
   answers, beating a tricky card, totals, and mastering each table.
 - A streak counts days with at least one finished session, and isn't broken until a whole day is missed.
 - Only happy sounds: there is no "wrong" buzzer.
+
+## Riddles
+
+- **One a day, at the first finished session**, whenever that is (bonus rounds count), so it works
+  the same on school days, weekends and holidays. She gets it for finishing, whatever her score:
+  a bad round never costs her the riddle.
+- **The answer comes the next day.** Her first session the next morning turns over yesterday's
+  card, then deals a new one under a wax seal. A day without playing costs nothing: the riddle
+  waits, and the answer comes at her next session. The morning chime screen says "🧩 Your riddle
+  answer is waiting!", a small pull towards answering the first call.
+- **She is never asked for her answer.** Riddles are a gift, not another test; she types answers
+  all day already. Talking about them at dinner is the point.
+- **About a third are number riddles she can work out in her head:** "Multiply me by myself, add
+  me, and you get 42", chickens and cows by heads and legs, 37 × 3 = 111 so what's 37 × 6? The
+  back of the card often has the trick or a bit of history ("a boy called Gauss…").
+- **Nothing can be skipped by tapping.** On the explainer screens Next only appears after time to
+  read; on a riddle card it only appears once she has opened the seal or turned the card over, and
+  a card can't be turned until she has had a few seconds with the question again.
+- **Her book** shows her stickers, all badges (and what is still to find), a map of the tables
+  that turns gold as facts settle, and every riddle card so far. It's look-only, closed during
+  quiet hours, and opens with a slide, like everything else, so pocket taps can't open it.
 
 ## Why it's built this way
 

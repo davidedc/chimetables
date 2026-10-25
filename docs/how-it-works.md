@@ -22,7 +22,9 @@ Alarms.scheduleNext ──setAlarmClock()──▶ WakeReceiver ──▶ KioskA
 - **`WakeReceiver`** logs the wake (how late it was, screen state, Doze, battery %), schedules the
   next one, and skips this one if `Session.nothingToDo` says nothing is due and no new card is
   allowed today. Otherwise it turns the screen on with a wake lock and starts `KioskActivity`.
-- **`KioskActivity`** moves through `SLEEPING → CALLING → QUESTION ⇄ FEEDBACK → DONE → SLEEPING`.
+- **`KioskActivity`** moves through `SLEEPING → CALLING → QUESTION ⇄ FEEDBACK → DONE → SLEEPING`,
+  with `DONE → STORY` (unlock explainer, riddle cards) after the first finished session of a day,
+  and `SLEEPING ⇄ BOOK` when she opens her book.
   While calling it holds its own screen wake lock and chimes on the alarm stream every 2 minutes,
   up to 5 times. `FLAG_KEEP_SCREEN_ON` isn't used because it proved unreliable on this firmware
   after an alarm wake.
@@ -42,6 +44,8 @@ The app is the **device owner** (set once over adb with `dpm set-device-owner`),
 - add user restrictions: `no_safe_boot` and `no_add_managed_profile` at provisioning time, and the
   rest in `harden.sh` (factory reset from Settings, installs and uninstalls, accounts, users,
   date/time, Bluetooth, crash dialogs)
+- turn off screenshots and screen recording for the whole device, re-applied every time the kiosk
+  resumes (`CAPTURE --ez allow true` lifts it while checking screens from the Mac)
 
 `Kiosk.java` applies these, `Maintenance.java` handles the 30-minute "exit kiosk" from parent
 mode, and `AdminReceiver` is the device-admin component. The navigation bar is pushed off-screen
@@ -58,14 +62,15 @@ adb shell am broadcast -n app.timestables/.CommandReceiver -a app.timestables.cm
 ```
 
 The commands are `STATUS`, `PROVISION`, `HARDEN`, `ALLOW_INSTALLS`, `UNHARDEN`, `SET_PIN`,
-`TEST_WAKE`, `SETTINGS`, `SET_TIME`, `RESTRICT`, `SCHEDULE`, `BEEP` and `RESET_PROGRESS`.
+`TEST_WAKE`, `SETTINGS`, `SET_TIME`, `RESTRICT`, `CAPTURE`, `SCHEDULE`, `BEEP` and `RESET_PROGRESS`.
 `scripts/env.sh` wraps them as `app_cmd`.
 
 ## Data
 
 | What | Where | Notes |
 |---|---|---|
-| cards, streaks, badges, stickers collected | `progress.json` in app-private storage | written atomically after every answer; a corrupt file is kept aside, not lost |
+| cards, streaks, badges, stickers collected, riddles dealt | `progress.json` in app-private storage | written atomically after every answer; a corrupt file is kept aside, not lost. Riddles are stored by a hash of the question, so the list can change |
+| riddles | `assets/riddles.txt` (+ optional `riddles-family.txt`) | in the APK; see the README |
 | settings | `settings.json` in app-private storage | parent mode or `scripts/settings.sh` |
 | parent PIN | SharedPreferences | salted PBKDF2-HMAC-SHA256 hash (20,000 iterations); wrong PINs lock it out for a minute, doubling |
 | event log | `/sdcard/Android/data/app.timestables/files/app.log` | wakes, chimes, sessions, policies; rotates at 512 KB |
@@ -81,8 +86,12 @@ App updates keep everything. Unhardening keeps everything. A factory reset loses
   - `Session`: picking and running cards
   - `Deck`: all cards and history
   - `Badges`, `WakePlanner`, `Settings`, `Json`, `PinHasher`
+  - `Riddle`: the riddle list format; dealing riddles and unlocking them lives in `Deck`
 - The Android side is deliberately small: plain Views built in code, no AndroidX, no XML layouts.
-  `Ui` holds the colours and the button style.
+  `Ui` holds the colours, the button style and the riddle cards' decorative font (Cinzel
+  Decorative, SIL Open Font License, in `assets/fonts/` with its licence). `RiddleCardView` draws
+  the cards (the wax seal, the 3D flip), `StoryView` the screens after a session, `BookView` and
+  `TablesMapView` her book.
 
 ## Verified on the real device
 

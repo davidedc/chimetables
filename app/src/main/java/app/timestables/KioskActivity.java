@@ -10,6 +10,7 @@ import android.os.SystemClock;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -27,6 +28,7 @@ import app.timestables.core.Card;
 import app.timestables.core.Deck;
 import app.timestables.core.PinHasher;
 import app.timestables.core.Rating;
+import app.timestables.core.Riddle;
 import app.timestables.core.Session;
 import app.timestables.core.Settings;
 import app.timestables.core.Srs;
@@ -43,6 +45,10 @@ import java.util.Random;
  * SLEEPING (screen normally off) -> CALLING (alarm woke us: chime every ~2 min until she slides to
  * start) -> QUESTION (she types the answer on a keypad) -> FEEDBACK (right, or the correct answer)
  * -> ... -> DONE ("well done", or confetti + a sticker + any new badges), then screen off.
+ * Collecting the first sticker set unlocks riddles: from then on the first finished session of
+ * each day goes on to STORY (yesterday's answer, today's sealed riddle card), and the very first
+ * time it explains the unlock. On the sleeping screen a second slider opens her BOOK (stickers,
+ * badges, a map of the tables, riddles), and today's riddle is shown.
  * Answers are graded automatically from correctness and recall speed (see {@link Answer}).
  * Outside quiet hours she can also wake the screen and slide to play: a normal session if anything
  * is due, otherwise a bonus round that doesn't change the schedule or earn rewards. A session left
@@ -67,8 +73,12 @@ public class KioskActivity extends Activity {
     private static final long SESSION_IDLE_MS = 3 * 60_000L;
     /** An unfinished session carries on if she slides again within this long. */
     private static final long RESUME_MS = 10 * 60_000L;
+    /** The book keeps the screen on until this long after the last touch. */
+    private static final long BOOK_IDLE_MS = 90_000L;
+    /** Before "Next" appears on a done screen that leads on to riddles, so a stray tap can't skip it. */
+    private static final long DONE_NEXT_PAUSE_MS = 2000;
 
-    private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE }
+    private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE, BOOK, STORY }
 
     /** What sliding on the sleeping screen starts. */
     private enum Play { NOTHING, SESSION, BONUS, RESUME }
@@ -99,13 +109,23 @@ public class KioskActivity extends Activity {
     private String doneTitle;
     private String doneDetail;
     private Stickers.Sticker doneSticker;
+    /** Screens to show after the done screen (unlock, riddles), or null. */
+    private List<StoryView.Step> story;
+    private boolean doneNextReady;
 
     private LinearLayout content;
+    private FrameLayout hero;
+    private RiddleCardView todayCard;
+    private SlideToStart bookSlider;
+    /** Holds the book or the story on top of everything but the confetti. */
+    private FrameLayout overlay;
+    private StoryView storyView;
     private TextView topLine;
     private TextView bigText;
     private ImageView stickerView;
     private TextView subText;
     private TextView footer;
+    private LinearLayout shelf;
     private Button primary;
     private SlideToStart slider;
     private LinearLayout keypad;
@@ -115,6 +135,14 @@ public class KioskActivity extends Activity {
     private final Runnable giveUpTask = this::giveUp;
     private final Runnable sleepTask = this::goToSleep;
     private final Runnable nextTask = this::next;
+    private final Runnable doneNextTask = () -> {
+        doneNextReady = true;
+        if (mode == Mode.DONE) {
+            primary.setAlpha(0f);
+            primary.setVisibility(View.VISIBLE);
+            primary.animate().alpha(1f).setDuration(300).start();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -137,7 +165,7 @@ public class KioskActivity extends Activity {
             Maintenance.end(this, false); // onResume then re-enters lock task
         } else if (intent != null && ACTION_WAKE.equals(intent.getAction())) {
             intent.setAction(null); // don't re-trigger on recreation
-            if (mode == Mode.QUESTION || mode == Mode.FEEDBACK || mode == Mode.DONE) {
+            if (mode == Mode.QUESTION || mode == Mode.FEEDBACK || mode == Mode.DONE || mode == Mode.STORY) {
                 AppLog.log(this, "wake while playing (" + mode + "): carrying on");
             } else {
                 startCalling();
@@ -157,6 +185,7 @@ public class KioskActivity extends Activity {
         if (Kiosk.isDeviceOwner(this) && !store.inMaintenance(now)) {
             Kiosk.allowLockTask(this);
             Kiosk.dpm(this).setStatusBarDisabled(AdminReceiver.component(this), true);
+            Kiosk.applyScreenCapture(this);
             if (!Kiosk.isInLockTask(this)) {
                 try {
                     startLockTask();
@@ -190,6 +219,7 @@ public class KioskActivity extends Activity {
         handler.removeCallbacksAndMessages(null);
         releaseScreen();
         session = null;
+        story = null;
         mode = Mode.SLEEPING;
         render();
         Alarms.scheduleNext(this, "screen off");
@@ -361,6 +391,10 @@ public class KioskActivity extends Activity {
         doneTitle = "All done for now!";
         doneDetail = "";
         doneSticker = null;
+        story = null;
+        doneNextReady = false;
+        Store store = Store.get(this);
+        long today = store.srs().dayNumber(System.currentTimeMillis());
         if (session != null && session.isBonus()) {
             // Practice only: no streak, badges or stickers, but confetti for a great round.
             celebrate = session.firstTryCorrect() * 100 >= session.planned() * CELEBRATE_PERCENT;
@@ -370,16 +404,14 @@ public class KioskActivity extends Activity {
                     + " right first time");
         } else if (session != null && !session.isEmpty()) {
             List<Badges.Badge> earned = recordSession();
-            Store store = Store.get(this);
             Deck deck = store.deck();
-            long today = store.srs().dayNumber(System.currentTimeMillis());
             boolean great = session.firstTryCorrect() * 100 >= session.planned() * CELEBRATE_PERCENT;
             celebrate = great || !earned.isEmpty();
             doneEmoji = session.perfect() ? "🎯" : great ? "🎉" : "🌟";
             doneTitle = session.perfect() ? "Perfect!" : great ? "Amazing!" : "Well done!";
             boolean newSticker = false;
             if (celebrate) {
-                doneSticker = Stickers.pick(this, deck, today);
+                doneSticker = Stickers.pick(this, deck, today, store.settings().newStickerEveryDays);
                 if (doneSticker != null) {
                     newSticker = deck.collectSticker(doneSticker.name, today);
                     store.saveDeck();
@@ -387,8 +419,12 @@ public class KioskActivity extends Activity {
             }
             StringBuilder detail = new StringBuilder();
             if (newSticker) {
-                detail.append("🖼️ New sticker! ").append(deck.stickers.size()).append(" of ")
-                        .append(Stickers.all(this).size()).append('\n');
+                // No total once the extra stickers are unlocked: the collection just keeps growing.
+                detail.append("🖼️ New sticker!");
+                if (deck.unlockedDay == 0) {
+                    detail.append(' ').append(deck.stickers.size()).append(" of ").append(Stickers.starter(this).size());
+                }
+                detail.append('\n');
             }
             for (Badges.Badge b : earned) detail.append("New badge: ").append(b.emoji).append(' ').append(b.title).append('\n');
             int streak = deck.streak(today);
@@ -401,6 +437,7 @@ public class KioskActivity extends Activity {
         } else {
             AppLog.log(this, "session done: nothing to practise");
         }
+        if (session != null && !session.isEmpty()) story = buildStory(store, today);
         setMode(Mode.DONE);
         if (celebrate) {
             confetti.burst();
@@ -409,7 +446,196 @@ public class KioskActivity extends Activity {
         } else {
             Chime.done();
         }
-        handler.postDelayed(sleepTask, celebrate ? CELEBRATION_MS : DONE_SCREEN_MS);
+        // With riddles to come, wait for her to tap Next (shown after a pause) instead of sleeping.
+        if (story != null) handler.postDelayed(doneNextTask, DONE_NEXT_PAUSE_MS);
+        else handler.postDelayed(sleepTask, celebrate ? CELEBRATION_MS : DONE_SCREEN_MS);
+    }
+
+    // ---------------------------------------------------------------- riddles
+
+    /**
+     * After a finished session (bonus rounds too): unlocks riddles once the first sticker set is
+     * complete, and deals a riddle at the first finished session of each day. The riddle is saved
+     * straight away, so walking off before the screens below loses nothing: it is on the sleeping
+     * screen and in the book. Returns the screens to show, or null.
+     */
+    private List<StoryView.Step> buildStory(Store store, long today) {
+        Deck deck = store.deck();
+        List<Riddle> bank = RiddleBank.get(this);
+        if (bank.isEmpty()) return null;
+        if (deck.unlockReady(Stickers.starter(this))) {
+            deck.unlockedDay = today;
+            AppLog.log(this, "riddles and more stickers unlocked");
+        }
+        if (deck.unlockedDay == 0) return null;
+        List<StoryView.Step> steps = new ArrayList<>();
+        boolean explain = !deck.unlockSeen;
+        if (explain) steps.addAll(unlockSteps());
+        Riddle current = null;
+        if (deck.riddleDue(today)) {
+            if (!deck.riddles.isEmpty()) {
+                Deck.DealtRiddle last = deck.riddles.get(deck.riddles.size() - 1);
+                Riddle previous = Deck.findRiddle(bank, last.key);
+                if (previous != null) {
+                    steps.add(answerStep(previous, deck.riddles.size(),
+                            today - last.day == 1 ? "Yesterday's riddle" : "Your last riddle"));
+                }
+            }
+            current = deck.dealRiddle(bank, today);
+            AppLog.log(this, "riddle " + deck.riddles.size() + " dealt: " + current.question.replace('\n', ' '));
+        } else if (explain && !deck.riddles.isEmpty()) {
+            // The explainer was left half-way earlier today: end it with today's riddle again.
+            current = Deck.findRiddle(bank, deck.riddles.get(deck.riddles.size() - 1).key);
+        }
+        store.saveDeck();
+        if (current != null) steps.add(riddleStep(current, deck.riddles.size(), explain));
+        return steps.isEmpty() ? null : steps;
+    }
+
+    private List<StoryView.Step> unlockSteps() {
+        List<StoryView.Step> steps = new ArrayList<>();
+        List<String> starter = Stickers.starter(this);
+        if (!starter.isEmpty()) {
+            StoryView.Step all = new StoryView.Step("All " + starter.size() + " stickers!", stickerCollage(starter),
+                    "You collected the whole set!", "Next ➜");
+            all.onShow = () -> {
+                confetti.burst();
+                Chime.fanfare();
+            };
+            steps.add(all);
+        }
+        StoryView.Step riddles = new StoryView.Step("You unlocked…", reveal("🧩", "Riddles"),
+                "A brand-new kind of card, just for you.", "Next ➜");
+        riddles.onShow = Chime::shimmer;
+        steps.add(riddles);
+        steps.add(new StoryView.Step("How riddles work", storyText("Every day, your first session brings a new "
+                + "riddle card.\n\nThink about it all day long…\n\nThe next day, you turn the card over to find "
+                + "the answer!"), "", "Next ➜"));
+        steps.add(new StoryView.Step("And…", reveal("🖼️", "More stickers"),
+                "You unlocked more stickers too. New ones will turn up as you play!", "Next ➜"));
+        steps.add(new StoryView.Step("Your book", reveal("📒", "My book"),
+                "Your stickers, badges, riddles and a map of your times tables. Slide 📒 on the sleeping "
+                        + "screen to open it.", "Next ➜"));
+        return steps;
+    }
+
+    private StoryView.Step answerStep(Riddle r, int number, String title) {
+        RiddleCardView card = new RiddleCardView(this, false);
+        card.bind(r, number, true, false);
+        StoryView.Step step = new StoryView.Step(title, card, "Tap the card to turn it over", "Next ➜");
+        step.afterHint = "Did you get it?";
+        step.card = card;
+        // Time to read the question again before it can be turned over.
+        step.cardDelayMs = Math.min(4500, 1500 + 30L * r.question.length());
+        return step;
+    }
+
+    /** Today's card, sealed. {@code endsExplainer}: reaching it means she has seen the unlock screens. */
+    private StoryView.Step riddleStep(Riddle r, int number, boolean endsExplainer) {
+        RiddleCardView card = new RiddleCardView(this, false);
+        card.bind(r, number, false, true);
+        StoryView.Step step = new StoryView.Step(number == 1 ? "Your first riddle" : "Today's riddle", card,
+                "Tap the seal to open it", "Bye bye 👋");
+        step.afterHint = "Think about it… the answer comes tomorrow!";
+        step.card = card;
+        if (endsExplainer) {
+            step.onShow = () -> {
+                Store store = Store.get(this);
+                store.deck().unlockSeen = true;
+                store.saveDeck();
+            };
+        }
+        return step;
+    }
+
+    private View reveal(String emoji, String word) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        TextView e = Ui.text(this, 104, Ui.INK, false);
+        e.setText(emoji);
+        box.addView(e);
+        TextView w = Ui.text(this, 40, Ui.MYSTERY_GOLD, false);
+        w.setTypeface(Ui.fancy(this));
+        w.setText(word);
+        box.addView(w);
+        e.setScaleX(0.3f);
+        e.setScaleY(0.3f);
+        e.animate().scaleX(1f).scaleY(1f).setStartDelay(200).setDuration(600)
+                .setInterpolator(new OvershootInterpolator(2.2f)).start();
+        return box;
+    }
+
+    private TextView storyText(String text) {
+        TextView t = Ui.text(this, 23, Ui.MYSTERY_INK, false);
+        t.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD));
+        t.setLineSpacing(0, 1.1f);
+        t.setText(text);
+        return t;
+    }
+
+    private View stickerCollage(List<String> names) {
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setGravity(Gravity.CENTER);
+        LinearLayout row = null;
+        for (int i = 0; i < names.size(); i++) {
+            if (i % 3 == 0) {
+                row = new LinearLayout(this);
+                grid.addView(row, new LinearLayout.LayoutParams(-1, 0, 1f));
+            }
+            ImageView img = new ImageView(this);
+            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            img.setImageBitmap(Stickers.load(this, names.get(i), 2));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1f);
+            int m = Ui.dp(this, 3);
+            lp.setMargins(m, m, m, m);
+            row.addView(img, lp);
+            popIn(img);
+        }
+        return grid;
+    }
+
+    private void startStory() {
+        if (story == null) {
+            goToSleep();
+            return;
+        }
+        handler.removeCallbacks(sleepTask);
+        handler.removeCallbacks(doneNextTask);
+        setMode(Mode.STORY);
+        holdScreen(SESSION_IDLE_MS);
+        storyView = new StoryView(this);
+        overlay.removeAllViews();
+        overlay.addView(storyView, new FrameLayout.LayoutParams(-1, -1));
+        overlay.setVisibility(View.VISIBLE);
+        List<StoryView.Step> steps = story;
+        story = null;
+        AppLog.log(this, "riddle screens: " + steps.size());
+        storyView.start(steps, this::goToSleep);
+    }
+
+    // ---------------------------------------------------------------- book
+
+    private void openBook() {
+        setMode(Mode.BOOK);
+        holdScreen(BOOK_IDLE_MS);
+        overlay.removeAllViews();
+        overlay.addView(new BookView(this, this::closeBook), new FrameLayout.LayoutParams(-1, -1));
+        overlay.setVisibility(View.VISIBLE);
+        AppLog.log(this, "book opened");
+    }
+
+    private void closeBook() {
+        if (mode != Mode.BOOK) return;
+        setMode(Mode.SLEEPING);
+    }
+
+    private void closeOverlay() {
+        if (storyView != null) storyView.stop();
+        storyView = null;
+        if (overlay.getChildCount() > 0) overlay.removeAllViews();
+        overlay.setVisibility(View.GONE);
     }
 
     /** Adds the session to the day's history (streaks) and awards any new badges. */
@@ -443,6 +669,7 @@ public class KioskActivity extends Activity {
     private void goToSleep() {
         handler.removeCallbacksAndMessages(null);
         session = null;
+        story = null;
         mode = Mode.SLEEPING;
         releaseScreen();
         confetti.stop();
@@ -486,8 +713,9 @@ public class KioskActivity extends Activity {
         topLine = Ui.text(this, 30, Ui.ORANGE, true);
         content.addView(topLine, new LinearLayout.LayoutParams(-1, -2));
 
-        // The question (or emoji) and, on celebrations, the sticker share the big slot.
-        FrameLayout hero = new FrameLayout(this);
+        // The question (or emoji) and, on celebrations, the sticker share the big slot; while
+        // sleeping, today's riddle card takes it once riddles are unlocked.
+        hero = new FrameLayout(this);
         bigText = Ui.text(this, 96, Ui.INK, true);
         bigText.setAutoSizeTextTypeUniformWithConfiguration(36, 110, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         bigText.setMaxLines(2);
@@ -496,6 +724,11 @@ public class KioskActivity extends Activity {
         stickerView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         stickerView.setVisibility(View.GONE);
         hero.addView(stickerView, new FrameLayout.LayoutParams(-1, -1));
+        todayCard = new RiddleCardView(this, true);
+        todayCard.setVisibility(View.GONE);
+        FrameLayout.LayoutParams tcp = new FrameLayout.LayoutParams(-1, -1);
+        tcp.setMargins(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4));
+        hero.addView(todayCard, tcp);
         content.addView(hero, new LinearLayout.LayoutParams(-1, 0, 3f));
 
         subText = Ui.text(this, 64, Ui.INK, true);
@@ -509,12 +742,24 @@ public class KioskActivity extends Activity {
         fp.bottomMargin = Ui.dp(this, 4);
         content.addView(footer, fp);
 
+        shelf = new LinearLayout(this);
+        shelf.setGravity(Gravity.CENTER);
+        shelf.setVisibility(View.GONE);
+        LinearLayout.LayoutParams shp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 34));
+        shp.bottomMargin = Ui.dp(this, 6);
+        content.addView(shelf, shp);
+
         primary = Ui.button(this, "", Ui.ORANGE, 30);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 92));
         lp.topMargin = Ui.dp(this, 6);
         content.addView(primary, lp);
         primary.setOnClickListener(v -> {
-            if (mode == Mode.DONE && tapAllowed()) goToSleep();
+            if (mode != Mode.DONE || !tapAllowed()) return;
+            if (story != null) {
+                if (doneNextReady) startStory();
+            } else {
+                goToSleep();
+            }
         });
 
         // Starting a session needs a deliberate slide, so pocket touches can't start one.
@@ -533,8 +778,26 @@ public class KioskActivity extends Activity {
         sp.topMargin = Ui.dp(this, 6);
         content.addView(slider, sp);
 
+        // Her book needs a slide too, for the same reason.
+        bookSlider = new SlideToStart(this);
+        bookSlider.setColors(android.graphics.Color.parseColor("#DCD6FF"), Ui.BOOK_PURPLE);
+        bookSlider.setLabelSize(Ui.dp(this, 21));
+        bookSlider.setLabel("📒 My book");
+        bookSlider.setListener(() -> {
+            Settings s = Store.get(this).settings();
+            if (mode == Mode.SLEEPING && !WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd)) openBook();
+            else render();
+        });
+        LinearLayout.LayoutParams bsp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 62));
+        bsp.topMargin = Ui.dp(this, 8);
+        content.addView(bookSlider, bsp);
+
         keypad = buildKeypad();
         content.addView(keypad, new LinearLayout.LayoutParams(-1, -2));
+
+        overlay = new FrameLayout(this);
+        overlay.setVisibility(View.GONE);
+        root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
 
         confetti = new ConfettiView(this);
         confetti.setVisibility(View.INVISIBLE);
@@ -571,14 +834,25 @@ public class KioskActivity extends Activity {
         content.setBackgroundColor(night ? Ui.NIGHT : Ui.BG);
         bigText.setTextColor(night ? Ui.NIGHT_INK : Ui.INK);
         subText.setTextColor(night ? Ui.NIGHT_INK : Ui.INK);
+        if (mode != Mode.BOOK && mode != Mode.STORY) closeOverlay();
         bigText.setVisibility(View.VISIBLE);
         stickerView.setVisibility(View.GONE);
+        todayCard.setVisibility(View.GONE);
+        topLine.setVisibility(night ? View.GONE : View.VISIBLE);
+        setHeroWeights(3f, 2f);
+        subText.setMaxLines(2);
         primary.setVisibility(View.GONE);
+        primary.animate().cancel();
+        primary.setAlpha(1f);
         slider.setVisibility(View.GONE);
         slider.reset();
+        bookSlider.setVisibility(View.GONE);
+        bookSlider.reset();
         keypad.setVisibility(View.GONE);
         keypad.setAlpha(1f);
         footer.setText("");
+        footer.setVisibility(View.VISIBLE);
+        shelf.setVisibility(View.GONE);
         footer.setTextSize(16);
         footer.setMinLines(0);
         footer.setMaxLines(Integer.MAX_VALUE);
@@ -589,15 +863,29 @@ public class KioskActivity extends Activity {
                 topLine.setText("");
                 bigText.setText("😴");
                 long next = store.nextWake();
-                subText.setText(next > 0 ? "Zzz… see you at " + Alarms.formatTime(next) : "Zzz…");
+                String zzz = next > 0 ? "Zzz… see you at " + Alarms.formatTime(next) : "Zzz…";
+                subText.setText(zzz);
+                Riddle latest = latestRiddle(store.deck());
+                if (latest != null) {
+                    // Today's riddle to think about; the sleepy face moves down next to the time.
+                    bigText.setVisibility(View.GONE);
+                    todayCard.bind(latest, store.deck().riddles.size(), false, false);
+                    todayCard.setVisibility(View.VISIBLE);
+                    subText.setText("😴 " + zzz);
+                    subText.setMaxLines(1);
+                    setHeroWeights(3.4f, 0.8f);
+                }
                 Play play = playOffered(store, now);
                 slider.setVisibility(play == Play.NOTHING ? View.GONE : View.VISIBLE);
                 slider.setLabel(play == Play.BONUS ? "Bonus round ⭐" : play == Play.RESUME ? "Slide to carry on" : "Slide to play");
+                Settings settings = store.settings();
+                boolean quiet = WakePlanner.isQuiet(LocalTime.now(), settings.quietStart, settings.quietEnd);
                 if (store.inMaintenance(now)) {
                     footer.setText("Maintenance mode until " + Alarms.formatTime(store.maintenanceUntil()));
                 } else {
-                    footer.setTextSize(20);
-                    footer.setText(trophyShelf(store.deck(), store.srs().dayNumber(now), Stickers.all(this).size()));
+                    footer.setVisibility(View.GONE);
+                    fillShelf(store.deck(), store.srs().dayNumber(now), Stickers.starter(this).size());
+                    bookSlider.setVisibility(quiet ? View.GONE : View.VISIBLE);
                 }
                 break;
             }
@@ -607,6 +895,12 @@ public class KioskActivity extends Activity {
                 subText.setText("👋");
                 slider.setVisibility(View.VISIBLE);
                 slider.setLabel("Slide to start");
+                Deck deck = store.deck();
+                if (deck.riddleDue(store.srs().dayNumber(now))) {
+                    footer.setTextSize(20);
+                    footer.setTextColor(Ui.INK);
+                    footer.setText(deck.riddles.isEmpty() ? "🧩 A new riddle is waiting!" : "🧩 Your riddle answer is waiting!");
+                }
                 break;
             case QUESTION: {
                 Card card = session.current();
@@ -648,8 +942,11 @@ public class KioskActivity extends Activity {
                 footer.setTextSize(20);
                 footer.setTextColor(Ui.INK);
                 footer.setText(doneDetail);
-                primary.setVisibility(View.VISIBLE);
-                primary.setText("Bye bye 👋");
+                primary.setVisibility(story == null || doneNextReady ? View.VISIBLE : View.INVISIBLE);
+                primary.setText(story == null ? "Bye bye 👋" : "Next ➜");
+                break;
+            case BOOK:
+            case STORY:
                 break;
         }
     }
@@ -682,26 +979,49 @@ public class KioskActivity extends Activity {
         footer.setLines(2);
     }
 
-    /** Streak, recent badges and the sticker collection, for the sleeping screen. */
-    private static String trophyShelf(Deck deck, long today, int stickersAvailable) {
-        StringBuilder sb = new StringBuilder();
+    private void setHeroWeights(float heroWeight, float subWeight) {
+        LinearLayout.LayoutParams h = (LinearLayout.LayoutParams) hero.getLayoutParams();
+        LinearLayout.LayoutParams s = (LinearLayout.LayoutParams) subText.getLayoutParams();
+        if (h.weight == heroWeight && s.weight == subWeight) return;
+        h.weight = heroWeight;
+        s.weight = subWeight;
+        hero.setLayoutParams(h);
+        subText.setLayoutParams(s);
+    }
+
+    /** The newest riddle she has been dealt (today's, or the one waiting for its answer), or null. */
+    private Riddle latestRiddle(Deck deck) {
+        if (deck.unlockedDay == 0 || deck.riddles.isEmpty()) return null;
+        return Deck.findRiddle(RiddleBank.get(this), deck.riddles.get(deck.riddles.size() - 1).key);
+    }
+
+    /**
+     * The sleeping screen's summary: streak, stickers and badges as three small chips. The details
+     * (which badges, which stickers) are in her book.
+     */
+    private void fillShelf(Deck deck, long today, int firstSet) {
+        shelf.removeAllViews();
         int streak = deck.streak(today);
-        if (streak >= 1) sb.append("🔥 ").append(streak).append(streak == 1 ? " day" : " days in a row");
-        if (stickersAvailable > 0 && !deck.stickers.isEmpty()) {
-            sb.append(sb.length() > 0 ? "  ·  " : "").append("🖼️ ").append(deck.stickers.size()).append(" of ")
-                    .append(stickersAvailable).append(" stickers");
+        if (streak >= 1) addChip("🔥 " + streak + (streak == 1 ? " day" : " days"));
+        if (!deck.stickers.isEmpty()) {
+            // Before the unlock she is collecting a set of known size; after it, no total.
+            addChip("🖼️ " + deck.stickers.size() + (deck.unlockedDay == 0 && firstSet > 0 ? " of " + firstSet : ""));
         }
-        if (!deck.badges.isEmpty()) {
-            List<Map.Entry<String, Long>> earned = new ArrayList<>(deck.badges.entrySet());
-            earned.sort((x, y) -> Long.compare(y.getValue(), x.getValue()));
-            sb.append(sb.length() > 0 ? "\n" : "");
-            for (int i = 0; i < Math.min(8, earned.size()); i++) {
-                Badges.Badge b = Badges.byId(earned.get(i).getKey());
-                if (b != null) sb.append(b.emoji).append(' ');
-            }
-            if (earned.size() > 8) sb.append("+").append(earned.size() - 8);
-        }
-        return sb.toString().trim();
+        if (!deck.badges.isEmpty()) addChip("🏅 " + deck.badges.size());
+        shelf.setVisibility(shelf.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void addChip(String text) {
+        TextView chip = Ui.text(this, 16, Ui.NIGHT_INK, true);
+        chip.setText(text);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Ui.NIGHT_CHIP);
+        bg.setCornerRadius(Ui.dp(this, 17));
+        chip.setBackground(bg);
+        chip.setPadding(Ui.dp(this, 14), 0, Ui.dp(this, 14), 0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -1);
+        lp.setMargins(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
+        shelf.addView(chip, lp);
     }
 
     /** One star per card in this session: gold once done, faint until then. Hidden for a single card. */
@@ -734,7 +1054,8 @@ public class KioskActivity extends Activity {
                 }
                 return true; // corner taps never reach the cards
             }
-            if (mode != Mode.SLEEPING && mode != Mode.CALLING) holdScreen(SESSION_IDLE_MS);
+            if (mode == Mode.BOOK) holdScreen(BOOK_IDLE_MS);
+            else if (mode != Mode.SLEEPING && mode != Mode.CALLING) holdScreen(SESSION_IDLE_MS);
             if (!tapAllowed() && (mode == Mode.QUESTION || mode == Mode.DONE)) return true;
         }
         return super.dispatchTouchEvent(ev);
@@ -774,7 +1095,9 @@ public class KioskActivity extends Activity {
         handler.removeCallbacksAndMessages(null);
         stopCalling();
         session = null;
+        story = null;
         mode = Mode.SLEEPING;
+        closeOverlay();
         startActivity(new Intent(this, ParentActivity.class));
     }
 }

@@ -46,6 +46,8 @@ public final class Json {
             }
             JSONObject badges = new JSONObject();
             for (java.util.Map.Entry<String, Long> e : deck.badges.entrySet()) badges.put(e.getKey(), e.getValue());
+            JSONArray riddles = new JSONArray();
+            for (Deck.DealtRiddle r : deck.riddles) riddles.put(new JSONObject().put("key", r.key).put("day", r.day));
             return new JSONObject()
                     .put("version", VERSION)
                     .put("newDay", deck.newDay)
@@ -56,6 +58,9 @@ public final class Json {
                     .put("badges", badges)
                     .put("stickers", new JSONArray(deck.stickers))
                     .put("stickerDay", deck.stickerDay)
+                    .put("unlockedDay", deck.unlockedDay)
+                    .put("unlockSeen", deck.unlockSeen)
+                    .put("riddles", riddles)
                     .put("cards", cards)
                     .toString(1);
         } catch (JSONException e) {
@@ -87,6 +92,13 @@ public final class Json {
         JSONArray stickers = root.optJSONArray("stickers");
         for (int i = 0; stickers != null && i < stickers.length(); i++) deck.stickers.add(stickers.getString(i));
         deck.stickerDay = root.optLong("stickerDay");
+        deck.unlockedDay = root.optLong("unlockedDay");
+        deck.unlockSeen = root.optBoolean("unlockSeen");
+        JSONArray riddles = root.optJSONArray("riddles");
+        for (int i = 0; riddles != null && i < riddles.length(); i++) {
+            JSONObject r = riddles.getJSONObject(i);
+            deck.riddles.add(new Deck.DealtRiddle(r.getString("key"), r.getLong("day")));
+        }
         JSONObject badges = root.optJSONObject("badges");
         if (badges != null) {
             for (java.util.Iterator<String> it = badges.keys(); it.hasNext(); ) {
@@ -134,6 +146,7 @@ public final class Json {
                     .put("beepIntervalSeconds", s.beepIntervalSeconds)
                     .put("brightness", s.brightness)
                     .put("screenTimeoutSeconds", s.screenTimeoutSeconds)
+                    .put("newStickerEveryDays", s.newStickerEveryDays)
                     .toString(1);
         } catch (JSONException e) {
             throw new IllegalStateException(e);
@@ -167,6 +180,7 @@ public final class Json {
         s.beepIntervalSeconds = o.optInt("beepIntervalSeconds", s.beepIntervalSeconds);
         s.brightness = o.optInt("brightness", s.brightness);
         s.screenTimeoutSeconds = o.optInt("screenTimeoutSeconds", s.screenTimeoutSeconds);
+        s.newStickerEveryDays = o.optInt("newStickerEveryDays", s.newStickerEveryDays);
         return s;
     }
 }

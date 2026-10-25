@@ -92,7 +92,9 @@ public class ParentActivity extends Activity {
                 + "/" + settings.newPerDay + "\n"
                 + st.answers + " answers, " + st.accuracyPercent() + "% Good/Easy\n"
                 + "Streak: " + deck.streak(today) + " day(s) · sessions so far: " + deck.totalSessions() + "\n"
-                + "Stickers collected: " + deck.stickers.size() + "/" + Stickers.all(this).size() + "\n"
+                + "Stickers collected: " + deck.stickers.size() + " · new ones left: "
+                + (deck.stickersLeft(Stickers.starter(this)) + deck.stickersLeft(Stickers.more(this))) + "\n"
+                + "Riddles: " + (deck.unlockedDay > 0 ? deck.riddles.size() + " of " + RiddleBank.get(this).size() + " dealt" : "not unlocked yet") + "\n"
                 + "Next wake-up: " + Alarms.format(store.nextWake()));
         body(hardestCards());
         body(slowestCards());

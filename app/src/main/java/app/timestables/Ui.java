@@ -23,8 +23,33 @@ final class Ui {
     static final int FAINT = Color.parseColor("#E3D3C2");
     static final int NIGHT = Color.parseColor("#1D2340");
     static final int NIGHT_INK = Color.parseColor("#C9D1FF");
+    static final int NIGHT_CHIP = Color.parseColor("#2C3461");
+    // Riddle cards: midnight and gold on the front, old parchment on the back.
+    static final int MYSTERY_TOP = Color.parseColor("#241A4F");
+    static final int MYSTERY_BOTTOM = Color.parseColor("#120D2E");
+    static final int MYSTERY_GOLD = Color.parseColor("#F0CB6B");
+    static final int MYSTERY_INK = Color.parseColor("#F7F1E3");
+    static final int PARCHMENT_TOP = Color.parseColor("#F8EBCD");
+    static final int PARCHMENT_BOTTOM = Color.parseColor("#EAD2A0");
+    static final int PARCHMENT_INK = Color.parseColor("#3D2A12");
+    static final int PARCHMENT_EDGE = Color.parseColor("#8B6534");
+    static final int BOOK_PURPLE = Color.parseColor("#6C5CE7");
+
+    private static Typeface fancy;
 
     private Ui() {}
+
+    /** The decorative capitals used on riddle cards (Cinzel Decorative, SIL Open Font License). */
+    static Typeface fancy(Context c) {
+        if (fancy == null) {
+            try {
+                fancy = Typeface.createFromAsset(c.getAssets(), "fonts/CinzelDecorative-Bold.ttf");
+            } catch (RuntimeException e) {
+                fancy = Typeface.create(Typeface.SERIF, Typeface.BOLD);
+            }
+        }
+        return fancy;
+    }
 
     static int dp(Context c, float dp) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, c.getResources().getDisplayMetrics()));
