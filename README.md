@@ -274,7 +274,8 @@ Not proven yet on the real device:
   after every wake, so no trouble is expected.
 - **A completely flat battery, then recharging:** a normal reboot comes straight back into the
   kiosk, but a flat-battery start hasn't been tried.
-- **The 10-minute limit for carrying on a session** wasn't waited out live (a simple elapsed-time check).
+- **The 10-minute limit for carrying on a session** was waited out on the emulator (paused at
+  17:31:52, "Carry on" offered at 17:32, gone at 17:42:09), not yet on the player.
 - **Parent mode on the device's own screen** hasn't been reviewed, as it needs the parent's PIN.
 - **Long-term badges** (30-day streak, everything mastered) are covered only by the JVM tests.
 - **Riddles and the book** were walked through on the emulator (unlock, first riddle, next day's
