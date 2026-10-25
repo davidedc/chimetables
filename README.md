@@ -238,6 +238,19 @@ Back this folder up along with `keystore/`.
   (background killer) is turned off and hidden by `provision.sh`, and the vendor factory-test app
   (`com.teksun.factorytest`) is hidden.
 
+Not proven yet on the real device:
+
+- **Battery over many days:** "about 4 days per charge" is extrapolated from one day and one night.
+- **Weeks without a reboot:** the longest uninterrupted run so far is 2 days. The alarm is re-armed
+  after every wake, so no trouble is expected.
+- **A completely flat battery, then recharging:** a normal reboot comes straight back into the
+  kiosk, but a flat-battery start hasn't been tried.
+- **The 10-minute limit for carrying on a session** wasn't waited out live (a simple elapsed-time check).
+- **Parent mode on the device's own screen** hasn't been reviewed, as it needs the parent's PIN.
+- **Long-term badges** (30-day streak, everything mastered) are covered only by the JVM tests.
+- **A determined child:** only the escape routes in G3 were tried. A hardware factory reset through
+  recovery can't be blocked by any app.
+
 ## Layout
 
 ```
