@@ -126,7 +126,8 @@ Tap the **top-left corner 7 times within 5 seconds**, then enter the PIN on the 
 
 - progress: mastered / learning / unseen / due / tricky cards, accuracy, streak, trickiest and
   slowest cards, every badge earned and when
-- tables (1–12) and "multiply up to" 10 or 12
+- tables (1–12) and "multiply up to" 10 or 12. Switching a table off asks first ("Stop practising
+  the 9× table?"), so a tap while scrolling can't do it unnoticed
 - wake-up times: two tabs, **School weeks** and **Holiday weeks** (✓ marks the one in use, "Use
   from now" switches), then each day's times. Tap a time to change or remove it; **+** adds one,
   offering the day before's times that this day doesn't have yet; **Copy Mon** (on each day from

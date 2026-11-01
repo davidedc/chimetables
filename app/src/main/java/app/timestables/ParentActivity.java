@@ -144,15 +144,35 @@ public class ParentActivity extends Activity {
             cb.setTextSize(20);
             cb.setChecked(settings.tables.contains(t));
             cb.setOnCheckedChangeListener((v, on) -> {
-                TreeSet<Integer> next = new TreeSet<>(settings.tables);
-                if (on) next.add(table);
-                else next.remove(table);
-                if (next.isEmpty()) {
-                    v.setChecked(true);
+                if (on) {
+                    if (settings.tables.contains(table)) return;
+                    TreeSet<Integer> next = new TreeSet<>(settings.tables);
+                    next.add(table);
+                    settings.tables = next;
+                    AppLog.log(this, "parent: " + table + "x table on");
+                    return;
+                }
+                if (!settings.tables.contains(table)) return; // set back by the dialog below
+                // A tap while scrolling can untick a box without anyone noticing: tick it again
+                // and only switch the table off once confirmed.
+                v.setChecked(true);
+                if (settings.tables.size() == 1) {
                     toast("Keep at least one table");
                     return;
                 }
-                settings.tables = next;
+                new AlertDialog.Builder(this)
+                        .setTitle("Stop practising the " + table + "× table?")
+                        .setMessage("Facts only in this table, like " + table + "\u00A0×\u00A0" + table
+                                + ", won't come up any more. Her progress on them is kept.")
+                        .setPositiveButton("Stop it", (d, w) -> {
+                            TreeSet<Integer> next = new TreeSet<>(settings.tables);
+                            next.remove(table);
+                            settings.tables = next;
+                            AppLog.log(this, "parent: " + table + "x table off");
+                            v.setChecked(false);
+                        })
+                        .setNegativeButton("Keep it", null)
+                        .show();
             });
             grid.addView(cb);
         }
