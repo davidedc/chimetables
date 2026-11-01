@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Show or change the app's settings over adb (the same settings as parent mode).
 #   scripts/settings.sh                                  show current settings
-#   scripts/settings.sh '{"wakeTimes":["07:30","17:00"]}'  change only the fields given
-# Fields: tables (list of 1-12), maxFactor (10|12), wakeTimes ["HH:MM",...], quietStart, quietEnd,
-#         sessionSize, newPerDay, volumePercent (0-100), beepRepeats, beepIntervalSeconds,
-#         brightness (0-255), screenTimeoutSeconds.
+#   scripts/settings.sh '{"week":"holiday"}'             change only the fields given
+#   scripts/settings.sh '{"school":{"mon":["07:45","17:00"],"quietStart":"21:00"}}'
+# Fields: tables (list of 1-12), maxFactor (10|12), week ("school"|"holiday": the plan in use),
+#         school / holiday: {"mon".."sun": ["HH:MM",...], quietStart, quietEnd} (only the days
+#         given change), sessionSize, newPerDay, volumePercent (0-100), beepRepeats,
+#         beepIntervalSeconds, brightness (0-255), screenTimeoutSeconds, newStickerEveryDays.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 

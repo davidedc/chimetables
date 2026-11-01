@@ -34,20 +34,21 @@ public final class Alarms {
 
     /** (Re)schedules the next session wake-up from the parent's schedule. Returns its time or 0. */
     public static long scheduleNext(Context context, String reason) {
-        Settings s = Store.get(context).settings();
-        ZonedDateTime next = WakePlanner.next(s.wakeTimes, s.quietStart, s.quietEnd, ZonedDateTime.now());
+        // Always her real schedule, even while a sandbox (scripts/sandbox.sh) is on screen.
+        Settings s = Store.real(context).settings();
+        ZonedDateTime next = WakePlanner.next(s.plan(), ZonedDateTime.now());
         AlarmManager am = context.getSystemService(AlarmManager.class);
         PendingIntent op = wakeIntent(context, KIND_SESSION, REQ_SESSION, next == null ? 0 : toMillis(next));
         if (next == null) {
             am.cancel(op);
-            Store.get(context).setNextWake(0);
+            Store.real(context).setNextWake(0);
             AppLog.log(context, "schedule (" + reason + "): no wake times outside quiet hours");
             return 0;
         }
         long at = toMillis(next);
         am.setAlarmClock(new AlarmManager.AlarmClockInfo(at, showIntent(context)), op);
-        Store.get(context).setNextWake(at);
-        AppLog.log(context, "schedule (" + reason + "): next session wake " + format(at));
+        Store.real(context).setNextWake(at);
+        AppLog.log(context, "schedule (" + reason + "): next session wake " + format(at) + " (" + s.week + " week)");
         return at;
     }
 

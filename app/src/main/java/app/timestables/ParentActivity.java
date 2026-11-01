@@ -3,7 +3,9 @@ package app.timestables;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.TimePickerDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,7 +24,9 @@ import android.widget.Toast;
 import app.timestables.core.Deck;
 import app.timestables.core.PinHasher;
 import app.timestables.core.Settings;
+import app.timestables.core.WeekPlan;
 
+import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,13 +41,23 @@ public class ParentActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable idleClose = this::finish;
+    private Store store;
     private Settings settings;
+    /** The week plan the times editor shows: the one in use when parent mode opens. */
+    private String editing;
     private LinearLayout list;
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.fixedTextSize(base));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        settings = Store.get(this).settings();
+        store = Store.get(this);
+        settings = store.settings();
+        editing = settings.week;
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Ui.BG);
         list = new LinearLayout(this);
@@ -74,7 +88,9 @@ public class ParentActivity extends Activity {
         super.onPause();
         open = false;
         handler.removeCallbacks(idleClose);
-        Store.get(this).saveSettings();
+        store.saveSettings();
+        AppLog.log(this, "settings saved: " + settings.week + " week; school " + settings.school
+                + "; holiday " + settings.holiday);
         Kiosk.applyDisplaySettings(this, settings);
         Alarms.scheduleNext(this, "settings");
     }
@@ -94,7 +110,6 @@ public class ParentActivity extends Activity {
 
     private void build() {
         list.removeAllViews();
-        Store store = Store.get(this);
         long now = System.currentTimeMillis();
 
         title("Parent settings");
@@ -145,36 +160,7 @@ public class ParentActivity extends Activity {
         row(stepper("Multiply up to", settings.maxFactor, 10, 12, 2, v -> settings.maxFactor = v));
 
         section("Wake-up times");
-        List<LocalTime> times = new ArrayList<>(settings.wakeTimes);
-        Collections.sort(times);
-        for (LocalTime t : times) {
-            LinearLayout r = hbox();
-            TextView label = Ui.text(this, 22, Ui.INK, true);
-            label.setText(t.toString());
-            r.addView(label, new LinearLayout.LayoutParams(0, -2, 1f));
-            r.addView(small("Change", v -> pickTime(t, picked -> replaceTime(t, picked))));
-            r.addView(small("Remove", v -> {
-                settings.wakeTimes.remove(t);
-                build();
-            }));
-            row(r);
-        }
-        row(small("Add a time", v -> pickTime(LocalTime.of(17, 0), picked -> {
-            if (!settings.wakeTimes.contains(picked)) settings.wakeTimes.add(picked);
-            build();
-        })));
-
-        section("Quiet hours (no wake-ups)");
-        LinearLayout q = hbox();
-        q.addView(small("From " + settings.quietStart, v -> pickTime(settings.quietStart, p -> {
-            settings.quietStart = p;
-            build();
-        })));
-        q.addView(small("To " + settings.quietEnd, v -> pickTime(settings.quietEnd, p -> {
-            settings.quietEnd = p;
-            build();
-        })));
-        row(q);
+        weekPlans();
 
         section("Sessions");
         row(stepper("Cards per session", settings.sessionSize, 1, 20, 1, v -> settings.sessionSize = v));
@@ -193,7 +179,7 @@ public class ParentActivity extends Activity {
 
         section("Tools");
         row(button("Test wake-up in 1 minute", Ui.ORANGE, v -> {
-            Store.get(this).saveSettings();
+            store.saveSettings();
             Alarms.scheduleTest(this, 60, true);
             toast("Turn the screen off and wait a minute");
             finish();
@@ -203,7 +189,7 @@ public class ParentActivity extends Activity {
                 .setTitle("Reset all progress?")
                 .setMessage("Every card goes back to new. This cannot be undone.")
                 .setPositiveButton("Reset", (d, w) -> {
-                    Store.get(this).resetProgress();
+                    store.resetProgress();
                     build();
                 })
                 .setNegativeButton("Cancel", null)
@@ -236,7 +222,7 @@ public class ParentActivity extends Activity {
     /** Slowest to recall on average: right but not yet automatic. */
     private String slowestCards() {
         List<app.timestables.core.Card> timed = new ArrayList<>();
-        for (app.timestables.core.Card c : Store.get(this).activeCards()) if (c.revealMsAvg > 0) timed.add(c);
+        for (app.timestables.core.Card c : store.activeCards()) if (c.revealMsAvg > 0) timed.add(c);
         if (timed.isEmpty()) return "";
         Collections.sort(timed, (a, b) -> Long.compare(b.revealMsAvg, a.revealMsAvg));
         StringBuilder sb = new StringBuilder("Slowest: ");
@@ -250,7 +236,7 @@ public class ParentActivity extends Activity {
 
     private String hardestCards() {
         List<app.timestables.core.Card> seen = new ArrayList<>();
-        for (app.timestables.core.Card c : Store.get(this).activeCards()) if (c.lapses > 0 || c.tricky) seen.add(c);
+        for (app.timestables.core.Card c : store.activeCards()) if (c.lapses > 0 || c.tricky) seen.add(c);
         if (seen.isEmpty()) return "No forgotten cards yet.";
         Collections.sort(seen, (a, b) -> a.lapses != b.lapses
                 ? Integer.compare(b.lapses, a.lapses) : Double.compare(a.ease, b.ease));
@@ -263,7 +249,7 @@ public class ParentActivity extends Activity {
     }
 
     private void exitKiosk() {
-        Store.get(this).saveSettings();
+        store.saveSettings();
         AppLog.log(this, "parent: exit kiosk for maintenance");
         Maintenance.start(this);
         // A lock screen hidden behind the kiosk would otherwise appear over Settings.
@@ -278,16 +264,172 @@ public class ParentActivity extends Activity {
 
     private void changePin() {
         PinPad.choose(this, "New PIN (4-8 digits)", pin -> {
-            Store.get(this).setPinHash(PinHasher.hash(pin));
+            store.setPinHash(PinHasher.hash(pin));
             AppLog.log(this, "parent PIN changed");
             toast("PIN changed");
         });
     }
 
-    private void replaceTime(LocalTime old, LocalTime picked) {
-        settings.wakeTimes.remove(old);
-        if (!settings.wakeTimes.contains(picked)) settings.wakeTimes.add(picked);
-        build();
+    // ---------------------------------------------------------------- week plans
+
+    private static String weekName(String which) {
+        return Settings.HOLIDAY.equals(which) ? "Holiday weeks" : "School weeks";
+    }
+
+    /**
+     * Two tabs (school weeks, holiday weeks; ✓ marks the one in use), then the shown plan's times
+     * day by day, and its quiet hours. Each day can copy the day before, all of it or one time.
+     */
+    private void weekPlans() {
+        LinearLayout tabs = hbox();
+        for (String which : new String[] {Settings.SCHOOL, Settings.HOLIDAY}) {
+            boolean shown = which.equals(editing);
+            Button b = Ui.button(this, (which.equals(settings.week) ? "✓ " : "") + weekName(which),
+                    shown ? Ui.BOOK_PURPLE : Ui.FAINT, 16);
+            if (!shown) b.setTextColor(Ui.INK);
+            b.setOnClickListener(v -> {
+                editing = which;
+                build();
+            });
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, Ui.dp(this, 48), 1f);
+            if (which.equals(Settings.SCHOOL)) p.setMarginEnd(Ui.dp(this, 8));
+            tabs.addView(b, p);
+        }
+        row(tabs);
+
+        LinearLayout use = hbox();
+        TextView inUse = Ui.text(this, 16, Ui.SOFT_INK, false);
+        inUse.setGravity(Gravity.START);
+        use.addView(inUse, new LinearLayout.LayoutParams(0, -2, 1f));
+        if (editing.equals(settings.week)) {
+            inUse.setText("In use now.");
+        } else {
+            inUse.setText("Not in use.");
+            use.addView(small("Use from now", v -> {
+                settings.week = editing;
+                AppLog.log(this, "parent: " + weekName(editing).toLowerCase(java.util.Locale.UK) + " in use");
+                build();
+            }));
+        }
+        row(use);
+
+        WeekPlan plan = settings.plan(editing);
+        for (DayOfWeek d : DayOfWeek.values()) dayTimes(plan, d);
+
+        TextView qt = Ui.text(this, 18, Ui.INK, true);
+        qt.setGravity(Gravity.START);
+        qt.setText("Quiet hours");
+        qt.setPadding(0, Ui.dp(this, 14), 0, 0);
+        list.addView(qt);
+        body("No calls and no playing.");
+        LinearLayout q = hbox();
+        q.addView(small("From " + plan.quietStart, v -> pickTime(plan.quietStart, p -> {
+            plan.quietStart = p;
+            build();
+        })));
+        q.addView(small("To " + plan.quietEnd, v -> pickTime(plan.quietEnd, p -> {
+            plan.quietEnd = p;
+            build();
+        })));
+        row(q);
+    }
+
+    /** One day: its name, "copy the day before", and its times as buttons (tap to change or remove). */
+    private void dayTimes(WeekPlan plan, DayOfWeek d) {
+        String name = d.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.UK);
+        String before = WeekPlan.shortName(d.minus(1));
+        boolean first = d == DayOfWeek.MONDAY;
+
+        LinearLayout head = hbox();
+        TextView label = Ui.text(this, 18, Ui.INK, true);
+        label.setGravity(Gravity.START);
+        label.setText(name);
+        head.addView(label, new LinearLayout.LayoutParams(0, -2, 1f));
+        if (!first && plan.sameAsPreviousDay(d)) {
+            TextView same = Ui.text(this, 15, Ui.SOFT_INK, false);
+            same.setText("same as " + before);
+            head.addView(same);
+        } else if (!first) {
+            head.addView(small("Copy " + before, v -> {
+                plan.copyPreviousDay(d);
+                build();
+            }));
+        }
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 48));
+        hp.topMargin = Ui.dp(this, 10);
+        list.addView(head, hp);
+
+        GridLayout grid = new GridLayout(this);
+        grid.setColumnCount(5);
+        List<LocalTime> times = plan.on(d);
+        for (LocalTime t : times) {
+            boolean quiet = plan.isQuiet(t);
+            Button b = Ui.button(this, t.toString(), quiet ? Ui.FAINT : Ui.BLUE, 16);
+            if (quiet) {
+                // Inside quiet hours: kept, but it won't ring.
+                b.setTextColor(Ui.SOFT_INK);
+                b.setPaintFlags(b.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+            }
+            b.setOnClickListener(v -> new AlertDialog.Builder(this)
+                    .setTitle(name + " " + t + (quiet ? " (in quiet hours: no call)" : ""))
+                    .setItems(new String[] {"Change time…", "Remove"}, (dlg, which) -> {
+                        if (which == 0) {
+                            pickTime(t, picked -> {
+                                plan.remove(d, t);
+                                plan.add(d, picked);
+                                build();
+                            });
+                        } else {
+                            plan.remove(d, t);
+                            build();
+                        }
+                    })
+                    .show());
+            grid.addView(b, cell());
+        }
+        if (times.size() < WeekPlan.MAX_PER_DAY) {
+            Button add = Ui.button(this, "+", Ui.GREEN, 20);
+            add.setOnClickListener(v -> addTime(plan, d, name, first));
+            grid.addView(add, cell());
+        }
+        list.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /** Offers the day before's times that this day doesn't have yet, or any other time. */
+    private void addTime(WeekPlan plan, DayOfWeek d, String name, boolean first) {
+        List<LocalTime> offer = new ArrayList<>();
+        if (!first) for (LocalTime t : plan.on(d.minus(1))) if (!plan.on(d).contains(t)) offer.add(t);
+        TimeCallback add = picked -> {
+            plan.add(d, picked);
+            build();
+        };
+        List<LocalTime> today = plan.on(d);
+        LocalTime suggest = today.isEmpty() ? LocalTime.of(17, 0) : today.get(today.size() - 1).plusHours(1);
+        if (offer.isEmpty()) {
+            pickTime(suggest, add);
+            return;
+        }
+        String[] items = new String[offer.size() + 1];
+        String from = d.minus(1).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.UK);
+        for (int i = 0; i < offer.size(); i++) items[i] = offer.get(i) + "  (as on " + from + ")";
+        items[offer.size()] = "Another time…";
+        new AlertDialog.Builder(this)
+                .setTitle("Add a call on " + name)
+                .setItems(items, (dlg, which) -> {
+                    if (which < offer.size()) add.onTime(offer.get(which));
+                    else pickTime(suggest, add);
+                })
+                .show();
+    }
+
+    private GridLayout.LayoutParams cell() {
+        GridLayout.LayoutParams p = new GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED),
+                GridLayout.spec(GridLayout.UNDEFINED, 1f));
+        p.width = 0;
+        p.height = Ui.dp(this, 44);
+        int m = Ui.dp(this, 3);
+        p.setMargins(m, m, m, m);
+        return p;
     }
 
     private interface TimeCallback { void onTime(LocalTime t); }

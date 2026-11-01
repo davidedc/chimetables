@@ -17,9 +17,11 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 
 ## How it behaves
 
-- **Wake-ups** at 07:45, 12:30, 16:00 and 18:00 by default (ours: 08:30 instead of 07:45),
-  never in quiet hours (19:30–07:00). A wake is skipped if nothing is due and no new card is
-  allowed today.
+- **Wake-ups** follow one of two week plans, switched in parent mode: **school weeks** (weekdays:
+  07:45, one after school, one mid-evening and 20:30; weekends: 10:00, 12:30, 16:00, 18:00; quiet
+  hours 21:00–07:00) and **holiday weeks** (every day 10:00, 12:30, 16:00, 18:00; quiet hours
+  19:30–07:00). Every day of each plan has its own times. A wake is skipped if nothing is due and
+  no new card is allowed today, and never rings in quiet hours.
 - **Calling:** the screen turns on and a friendly chime plays on the alarm stream, repeating every
   2 minutes up to 5 times. The child **slides** the big slider to start. Taps and pocket brushes
   do nothing, so a session can't start (or be answered) by accident.
@@ -50,7 +52,10 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
   has already met, drawn at random from the least established ones. It is practice only: the
   schedule, streak, badges and stickers are untouched (confetti for a great round, nothing to
   collect), and `reviews.jsonl` marks those answers `"bonus":true`.
-- **Quiet hours** (19:30–07:00) also block playing by hand: no slider at all, just "Zzz…".
+- **Quiet hours** (those of the plan in use) also block playing by hand: no slider at all, just "Zzz…".
+- **Text size:** the app ignores Android's text size setting, so the player looks exactly like the
+  emulator. The X55 came set to "Largest" (1.3×), which wrapped the book's tabs and pushed buttons
+  off the bottom of some screens.
 - **No screenshots:** screen capture is turned off for the whole device (device-owner policy), so
   nothing collects in a photo library. `CAPTURE --ez allow true` from the Mac lifts it for checking.
   Checked on the player: the screenshot key saves nothing and `adb shell screencap` gives an empty
@@ -65,7 +70,12 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
 | G3 lock task | PASS | Home, Back, Recents, shade, assist blocked (adb + by hand); power long-press shows no menu (by hand); no lock screen after power off/on; safe boot: entered without the restriction, blocked with `DISALLOW_SAFE_BOOT` (Volume Down held during boot) |
 | G4 autonomous wake | PASS | `setAlarmClock` and `setExactAndAllowWhileIdle` both fired on time from screen-off, in forced deep Doze, and after the process was killed; screen on, chime heard, repeat chime heard. **Unplugged for 4.5 h:** the 12:30 wake fired 1 s late after 2 h with the screen off, chimed 5 times, went back to sleep; no shutdown (after fixing the vendor auto shutdown, see Known limits). **Unplugged 18¾ h overnight:** 18:00 and 08:30 fired 1 s late, silent in quiet hours, 18% battery used including a lot of play |
 | G5 reboot | PASS | boots straight into the kiosk (HOME, lock task), `BOOT_COMPLETED` received, 07:45 alarm re-armed |
-| G6 time | PASS (option A) | Europe/London; no network, so auto time is off and the clock is set from the Mac (≈0.1 s, drifts ≈1 s a day); summer/winter time changes happen by themselves (verified 25 Oct 2026) |
+| G6 time | PASS (option A) | Europe/London; no network, so auto time is off and the clock is set from the Mac (≈0.1 s; it drifted 18 s in the first week); summer/winter time changes happen by themselves (verified 25 Oct 2026) |
+
+Every screen was also checked on the player itself, through `scripts/sandbox.sh` with test
+progress: the sleeping screen, play, the busiest done screen (new sticker, three new badges and a
+streak), the six unlock screens, yesterday's answer and a new sealed card, all four pages of the
+book, and parent mode with the week plans.
 
 ## Setting up from scratch
 
@@ -117,7 +127,12 @@ Tap the **top-left corner 7 times within 5 seconds**, then enter the PIN on the 
 - progress: mastered / learning / unseen / due / tricky cards, accuracy, streak, trickiest and
   slowest cards, every badge earned and when
 - tables (1–12) and "multiply up to" 10 or 12
-- wake-up times, quiet hours, cards per session, new cards per day, beeps if no answer
+- wake-up times: two tabs, **School weeks** and **Holiday weeks** (✓ marks the one in use, "Use
+  from now" switches), then each day's times. Tap a time to change or remove it; **+** adds one,
+  offering the day before's times that this day doesn't have yet; **Copy Mon** (on each day from
+  Tuesday) copies all of the day before ("same as Mon" when they already match). Each plan has its
+  own quiet hours; a time inside them is shown struck through and doesn't ring.
+- cards per session, new cards per day, beeps if no answer
 - beep volume (with test beep) and brightness
 - test wake-up in 1 minute, change PIN, reset all progress
 - **Exit kiosk for 30 min (maintenance)**: leaves lock task and opens Settings. Because the
@@ -130,13 +145,15 @@ On the device: parent mode (above). From the Mac:
 
 ```sh
 scripts/settings.sh                                              # show
-scripts/settings.sh '{"wakeTimes":["07:30","12:30","17:00"]}'
+scripts/settings.sh '{"week":"holiday"}'                         # holiday weeks from now
+scripts/settings.sh '{"school":{"tue":["07:45","16:00","20:30"],"quietStart":"21:15"}}'
 scripts/settings.sh '{"tables":[2,3,4,5,10],"maxFactor":10}'
-scripts/settings.sh '{"quietStart":"20:00","quietEnd":"07:00","sessionSize":6,"newPerDay":4}'
+scripts/settings.sh '{"sessionSize":6,"newPerDay":4}'
 scripts/settings.sh '{"volumePercent":60,"beepRepeats":3,"brightness":90}'
 ```
 
-Only the fields given change; the next wake-up is rescheduled immediately. Cards are every `a × b`
+Only the fields given change (in a plan, only the days given); the next wake-up is rescheduled
+immediately. The plans are `"school"` and `"holiday"`, with days `"mon"` to `"sun"`. Cards are every `a × b`
 where a or b is a selected table and both are in 2..maxFactor (plus the selected tables
 themselves); `7×8` and `8×7` are separate cards. Defaults (2–12, up to 12×12 = 121 cards) live in
 `app/src/main/java/app/timestables/core/Settings.java`.
@@ -160,6 +177,7 @@ same key, and a device-owner app can't simply be uninstalled and reinstalled.
 | `provision.sh [--keep-radios]` | device owner (asks), Doze whitelist, DuraSpeed + vendor auto shutdown off, Wi-Fi/BT off, nav bar off-screen, DND off, kiosk policies, Europe/London, hides 41 apps, clock |
 | `set-pin.sh` | set or reset the parent PIN (hidden input, stored only as a salted PBKDF2 hash) |
 | `settings.sh [json]` | show or change settings |
+| `sandbox.sh on [progress.json] \| off` | check any screen on the player without touching her progress: a throwaway copy (her progress, or a test file) with her settings and a parent PIN of its own; ends when the screen goes off, after 20 minutes or when a real call is due |
 | `harden.sh [--yes]` | restrictions: no factory reset (Settings), safe boot, users, installs/uninstalls, accounts, date/time, Bluetooth, crash dialogs. **USB debugging stays on.** |
 | `unharden.sh [--keep-owner] [--yes]` | emergency undo (see Recovery) |
 | `logs.sh [lines\|--follow]` | pulls `app.log` (wakes, beeps, sessions) and `reviews.jsonl` into `logs/`; prints the device state and her collection, and says when the extra stickers are running out |
@@ -278,10 +296,9 @@ Not proven yet on the real device:
   kiosk, but a flat-battery start hasn't been tried.
 - **The 10-minute limit for carrying on a session** was waited out on the emulator (paused at
   17:31:52, "Carry on" offered at 17:32, gone at 17:42:09), not yet on the player.
-- **Parent mode on the device's own screen** hasn't been reviewed, as it needs the parent's PIN.
 - **Long-term badges** (30-day streak, everything mastered) are covered only by the JVM tests.
-- **Riddles and the book** were walked through on the emulator (unlock, first riddle, next day's
-  answer, book pages). On the player, her first real unlock is still to come.
+- **School weeks** were checked by moving the emulator's clock through a week; the player starts
+  its first one on 2 November 2026.
 - **A determined child:** only the escape routes in G3 were tried. A hardware factory reset through
   recovery can't be blocked by any app.
 
@@ -290,7 +307,7 @@ Not proven yet on the real device:
 ```
 app/src/main/java/app/timestables/
   core/            pure Java: Srs (scheduler), Answer (grading), Session, Deck, Badges, WakePlanner,
-                   Settings, Json, PinHasher, Riddle
+                   Settings, WeekPlan, Json, PinHasher, Riddle
   KioskActivity    the child's screen          ParentActivity  PIN-protected settings
   StoryView, RiddleCardView, RiddleBank        unlock explainer, riddle cards (seal, flip), the list
   BookView, TablesMapView, StickerIcon         her book

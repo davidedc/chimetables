@@ -20,6 +20,11 @@ import java.util.List;
 /**
  * App-private persistence: progress and settings as JSON files (AtomicFile, so a power cut mid-write
  * keeps the previous copy), small flags in SharedPreferences. Survives reboots and app updates.
+ *
+ * <p>A sandbox (scripts/sandbox.sh) swaps in a throwaway copy: progress (hers, or a test file) and
+ * settings in files/sandbox/, and a PIN of its own, so every screen, parent mode included, can be
+ * checked on the real device without touching her progress. The alarm and maintenance state stay
+ * shared with the real store; {@link #real} is for what must always be hers (the alarm schedule).
  */
 public final class Store {
     private static final String PROGRESS = "progress.json";
@@ -30,21 +35,87 @@ public final class Store {
     private static final String KEY_PIN_FAILS = "pin_fails";
     private static final String KEY_PIN_LOCKED_UNTIL = "pin_locked_until";
 
+    private static final String SANDBOX = "sandbox";
+
     private static Store instance;
+    private static Store sandbox;
 
     private final Context app;
+    private final File dir;
+    /** Next wake and maintenance: always the real ones. */
     private final SharedPreferences prefs;
+    /** PIN and wrong-PIN throttling: the sandbox has its own. */
+    private final SharedPreferences pinPrefs;
     private Deck deck;
     private Settings settings;
 
+    /** The store in use: hers, or the sandbox while one is on. */
     public static synchronized Store get(Context context) {
-        if (instance == null) instance = new Store(context.getApplicationContext());
+        return sandbox != null ? sandbox : real(context);
+    }
+
+    /** Always hers, even while a sandbox is on. */
+    public static synchronized Store real(Context context) {
+        if (instance == null) {
+            Context app = context.getApplicationContext();
+            SharedPreferences state = app.getSharedPreferences("state", Context.MODE_PRIVATE);
+            instance = new Store(app, app.getFilesDir(), state, state);
+        }
         return instance;
     }
 
-    private Store(Context app) {
+    public static synchronized boolean inSandbox() {
+        return sandbox != null;
+    }
+
+    /**
+     * Starts a sandbox with her settings and either her progress or {@code progressFile} (a file in
+     * the app's external files dir, pushed with adb). Returns a line for the log.
+     */
+    public static synchronized String startSandbox(Context context, String progressFile) {
+        Store real = real(context);
+        Context app = real.app;
+        endSandbox(context);
+        String progress;
+        if (progressFile == null) {
+            progress = real.read(PROGRESS);
+        } else {
+            File ext = app.getExternalFilesDir(null);
+            File f = ext == null ? null : new File(ext, new File(progressFile).getName());
+            if (f == null || !f.isFile()) return "sandbox not started: " + progressFile + " not found";
+            try {
+                progress = new String(java.nio.file.Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+                Json.deckFromJson(progress);
+            } catch (Exception e) {
+                return "sandbox not started: " + progressFile + " unreadable (" + e + ")";
+            }
+        }
+        File dir = new File(app.getFilesDir(), SANDBOX);
+        if (!dir.isDirectory() && !dir.mkdirs()) return "sandbox not started: cannot create " + dir;
+        Store s = new Store(app, dir, real.prefs, app.getSharedPreferences(SANDBOX, Context.MODE_PRIVATE));
+        if (progress != null) s.write(PROGRESS, progress);
+        s.write(SETTINGS, Json.settingsToJson(real.settings()));
+        sandbox = s;
+        return "sandbox on: " + (progressFile == null ? "a copy of her progress" : progressFile)
+                + "; her own progress is untouched until it ends";
+    }
+
+    /** Ends the sandbox, if any, and deletes its files. */
+    public static synchronized String endSandbox(Context context) {
+        if (sandbox == null) return "no sandbox";
+        Store s = sandbox;
+        sandbox = null;
+        File[] files = s.dir.listFiles();
+        if (files != null) for (File f : files) f.delete();
+        s.pinPrefs.edit().clear().commit();
+        return "sandbox off: back to her progress";
+    }
+
+    private Store(Context app, File dir, SharedPreferences prefs, SharedPreferences pinPrefs) {
         this.app = app;
-        this.prefs = app.getSharedPreferences("state", Context.MODE_PRIVATE);
+        this.dir = dir;
+        this.prefs = prefs;
+        this.pinPrefs = pinPrefs;
     }
 
     public synchronized Deck deck() {
@@ -97,26 +168,26 @@ public final class Store {
     }
 
     public String pinHash() {
-        return prefs.getString(KEY_PIN, null);
+        return pinPrefs.getString(KEY_PIN, null);
     }
 
     public void setPinHash(String hash) {
-        prefs.edit().putString(KEY_PIN, hash).putInt(KEY_PIN_FAILS, 0).commit();
+        pinPrefs.edit().putString(KEY_PIN, hash).putInt(KEY_PIN_FAILS, 0).commit();
     }
 
     /** Wrong-PIN throttling: after 3 misses, lock out for a minute (doubling each further miss). */
     public long pinLockedUntil() {
-        return prefs.getLong(KEY_PIN_LOCKED_UNTIL, 0);
+        return pinPrefs.getLong(KEY_PIN_LOCKED_UNTIL, 0);
     }
 
     public void recordPinResult(boolean ok, long now) {
         if (ok) {
-            prefs.edit().putInt(KEY_PIN_FAILS, 0).putLong(KEY_PIN_LOCKED_UNTIL, 0).apply();
+            pinPrefs.edit().putInt(KEY_PIN_FAILS, 0).putLong(KEY_PIN_LOCKED_UNTIL, 0).apply();
             return;
         }
-        int fails = prefs.getInt(KEY_PIN_FAILS, 0) + 1;
+        int fails = pinPrefs.getInt(KEY_PIN_FAILS, 0) + 1;
         long lock = fails >= 3 ? now + 60_000L * (1L << Math.min(fails - 3, 6)) : 0;
-        prefs.edit().putInt(KEY_PIN_FAILS, fails).putLong(KEY_PIN_LOCKED_UNTIL, lock).apply();
+        pinPrefs.edit().putInt(KEY_PIN_FAILS, fails).putLong(KEY_PIN_LOCKED_UNTIL, lock).apply();
     }
 
     public long maintenanceUntil() {
@@ -140,7 +211,7 @@ public final class Store {
     }
 
     private AtomicFile file(String name) {
-        return new AtomicFile(new File(app.getFilesDir(), name));
+        return new AtomicFile(new File(dir, name));
     }
 
     private String read(String name) {

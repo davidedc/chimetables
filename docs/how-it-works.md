@@ -12,8 +12,9 @@ Alarms.scheduleNext ──setAlarmClock()──▶ WakeReceiver ──▶ KioskA
               app resume                       ◀──────────── screen off, back to SLEEPING ◀────┘
 ```
 
-- **One alarm at a time.** `Alarms.scheduleNext` asks `WakePlanner` for the next wake-up time that
-  isn't in quiet hours and sets a single `AlarmManager.setAlarmClock()` alarm. That's the strongest
+- **One alarm at a time.** `Alarms.scheduleNext` asks `WakePlanner` for the next wake-up time in
+  the week plan in use (school or holiday weeks: each day has its own times) that isn't in that
+  plan's quiet hours, and sets a single `AlarmManager.setAlarmClock()` alarm. That's the strongest
   alarm Android has: it leaves Doze early and is never deferred.
 - **Rescheduled from everywhere**, so a missed broadcast can't break the chain: right after each wake
   fires, when the screen goes off, on boot (`BOOT_COMPLETED` and `LOCKED_BOOT_COMPLETED`), when the
@@ -87,12 +88,20 @@ The commands are `STATUS`, `PROVISION`, `HARDEN`, `ALLOW_INSTALLS`, `UNHARDEN`, 
 |---|---|---|
 | cards, streaks, badges, stickers collected, riddles dealt | `progress.json` in app-private storage | written atomically after every answer; a corrupt file is kept aside, not lost. Riddles are stored by a hash of the question, so the list can change |
 | riddles | `assets/riddles.txt` (+ optional `riddles-family.txt`) | in the APK; see the README |
-| settings | `settings.json` in app-private storage | parent mode or `scripts/settings.sh` |
+| settings | `settings.json` in app-private storage | parent mode or `scripts/settings.sh`; holds both week plans and which is in use. A file from before week plans becomes the holiday plan, still in use |
 | parent PIN | SharedPreferences | salted PBKDF2-HMAC-SHA256 hash (20,000 iterations); wrong PINs lock it out for a minute, doubling |
 | event log | `/sdcard/Android/data/app.timestables/files/app.log` | wakes, chimes, sessions, policies; rotates at 512 KB |
 | answer history | `.../files/reviews.jsonl` | one JSON line per answer: card, what was typed, right or wrong, grade, response time, interval |
 
 App updates keep everything. Unhardening keeps everything. A factory reset loses everything.
+
+**Sandbox** (`scripts/sandbox.sh`): `Store` can swap in a throwaway copy, in `files/sandbox/`, of
+her progress (or a test file pushed with adb) and settings, with a parent PIN of its own. Every
+screen, parent mode included, can then be checked on the player itself, and nothing done there
+reaches her data: answers aren't added to `reviews.jsonl`, log lines are marked `[sandbox]`, and
+the alarm keeps following her real schedule (`Store.real`). The kiosk makes the switch itself,
+after dropping whatever it was showing, and switches back when the screen goes off, after
+20 minutes, or when a real call is due.
 
 ## Code layout
 
@@ -101,9 +110,12 @@ App updates keep everything. Unhardening keeps everything. A factory reset loses
   - `Answer`: grading
   - `Session`: picking and running cards
   - `Deck`: all cards and history
-  - `Badges`, `WakePlanner`, `Settings`, `Json`, `PinHasher`
+  - `Badges`, `WakePlanner`, `WeekPlan` (one kind of week: times per day, quiet hours), `Settings`,
+    `Json`, `PinHasher`
   - `Riddle`: the riddle list format; dealing riddles and unlocking them lives in `Deck`
 - The Android side is deliberately small: plain Views built in code, no AndroidX, no XML layouts.
+  The activities ignore Android's text size setting (`Ui.fixedTextSize`), so every screen is laid
+  out at one size: the X55 ships set to "Largest", which wrapped labels and cut buttons off.
   `Ui` holds the colours, the button style and the riddle cards' decorative font (Cinzel
   Decorative, SIL Open Font License, in `assets/fonts/` with its licence). `RiddleCardView` draws
   the cards (the wax seal, the 3D flip), `StoryView` the screens after a session, `BookView` and

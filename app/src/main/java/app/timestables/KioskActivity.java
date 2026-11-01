@@ -1,7 +1,10 @@
 package app.timestables;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -32,7 +35,6 @@ import app.timestables.core.Riddle;
 import app.timestables.core.Session;
 import app.timestables.core.Settings;
 import app.timestables.core.Srs;
-import app.timestables.core.WakePlanner;
 
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -58,6 +60,8 @@ import java.util.Random;
  */
 public class KioskActivity extends Activity {
     public static final String ACTION_WAKE = "app.timestables.action.WAKE";
+    /** From CommandReceiver: extras "on" (boolean) and "progress" (optional test file). */
+    public static final String ACTION_SANDBOX = "app.timestables.action.SANDBOX";
 
     private static final int CORNER_TAPS = 7;
     private static final long CORNER_WINDOW_MS = 5000;
@@ -83,6 +87,8 @@ public class KioskActivity extends Activity {
     private static final long DONE_NEXT_PAUSE_MS = 2000;
     /** The play / book buttons go back to the slider after this long without a choice. */
     private static final long CHOICE_MS = 10_000;
+    /** A sandbox ends by itself after this long (and whenever the screen goes off). */
+    private static final long SANDBOX_MS = 20 * 60_000L;
 
     private enum Mode { SLEEPING, CALLING, QUESTION, FEEDBACK, DONE, BOOK, STORY }
 
@@ -90,6 +96,14 @@ public class KioskActivity extends Activity {
     private enum Play { NOTHING, SESSION, BONUS, RESUME }
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    /** Separate from {@link #handler}, which is cleared at every sleep. */
+    private final Handler sandboxTimer = new Handler(Looper.getMainLooper());
+    private final BroadcastReceiver screenOffReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Store.inSandbox()) setSandbox(false, null, "screen off");
+        }
+    };
     private final Random random = new Random();
     private Mode mode = Mode.SLEEPING;
     private Session session;
@@ -159,11 +173,25 @@ public class KioskActivity extends Activity {
     };
 
     @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.fixedTextSize(base));
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         buildViews();
+        registerReceiver(screenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         AppLog.log(this, "KioskActivity created");
         handleIntent(getIntent());
+    }
+
+    @Override
+    protected void onDestroy() {
+        unregisterReceiver(screenOffReceiver);
+        sandboxTimer.removeCallbacksAndMessages(null);
+        if (Store.inSandbox()) AppLog.log(this, Store.endSandbox(this) + " (kiosk closed)");
+        super.onDestroy();
     }
 
     @Override
@@ -177,8 +205,14 @@ public class KioskActivity extends Activity {
         if (intent != null && Maintenance.ACTION_END.equals(intent.getAction())) {
             intent.setAction(null);
             Maintenance.end(this, false); // onResume then re-enters lock task
+        } else if (intent != null && ACTION_SANDBOX.equals(intent.getAction())) {
+            intent.setAction(null);
+            setSandbox(intent.getBooleanExtra("on", false), intent.getStringExtra("progress"), "adb");
         } else if (intent != null && ACTION_WAKE.equals(intent.getAction())) {
             intent.setAction(null); // don't re-trigger on recreation
+            if (Store.inSandbox() && Alarms.KIND_SESSION.equals(intent.getStringExtra(Alarms.EXTRA_KIND))) {
+                setSandbox(false, null, "a real call is due"); // her call, with her progress
+            }
             if (mode == Mode.QUESTION || mode == Mode.FEEDBACK || mode == Mode.DONE || mode == Mode.STORY) {
                 AppLog.log(this, "wake while playing (" + mode + "): carrying on");
             } else if (mode == Mode.BOOK && book != null) {
@@ -709,7 +743,7 @@ public class KioskActivity extends Activity {
     }
 
     private static boolean quietNow(Settings s) {
-        return WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd);
+        return s.plan().isQuiet(LocalTime.now());
     }
 
     // ---------------------------------------------------------------- book
@@ -754,16 +788,31 @@ public class KioskActivity extends Activity {
         result.comeback = session.comeback();
         result.morning = morning;
         List<Badges.Badge> earned = Badges.evaluate(deck, store.activeCards(), store.settings(),
-                wakesPerDay(store.settings()), today, result, now);
+                store.settings().plan().callsOn(java.time.LocalDate.now().getDayOfWeek()), today, result, now);
         store.saveDeck();
         if (!earned.isEmpty()) AppLog.log(this, "badges earned: " + earned);
         return earned;
     }
 
-    private static int wakesPerDay(Settings s) {
-        int n = 0;
-        for (LocalTime t : s.wakeTimes) if (!WakePlanner.isQuiet(t, s.quietStart, s.quietEnd)) n++;
-        return n;
+    /**
+     * Switches between her progress and a sandbox (see {@link Store}). Everything tied to the store
+     * being left (a session, a paused one, riddle screens, the book) is dropped first.
+     */
+    private void setSandbox(boolean on, String progressFile, String why) {
+        if (!on && !Store.inSandbox()) return;
+        handler.removeCallbacksAndMessages(null);
+        sandboxTimer.removeCallbacksAndMessages(null);
+        stopCalling();
+        session = null;
+        paused = null;
+        story = null;
+        choosing = false;
+        mode = Mode.SLEEPING;
+        confetti.stop();
+        closeOverlay();
+        AppLog.log(this, (on ? Store.startSandbox(this, progressFile) : Store.endSandbox(this)) + " (" + why + ")");
+        if (Store.inSandbox()) sandboxTimer.postDelayed(() -> setSandbox(false, null, "time is up"), SANDBOX_MS);
+        render();
     }
 
     private void goToSleep() {
@@ -1065,7 +1114,7 @@ public class KioskActivity extends Activity {
      */
     private Play playOffered(Store store, long now) {
         Settings s = store.settings();
-        if (WakePlanner.isQuiet(LocalTime.now(), s.quietStart, s.quietEnd)) return Play.NOTHING;
+        if (quietNow(s)) return Play.NOTHING;
         if (resumable() != null) return Play.RESUME;
         List<Card> active = store.activeCards();
         if (!Session.nothingToDo(store.deck(), store.srs(), active, s.newPerDay, now)) return Play.SESSION;

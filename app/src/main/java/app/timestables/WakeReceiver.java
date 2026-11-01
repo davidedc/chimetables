@@ -35,7 +35,7 @@ public class WakeReceiver extends BroadcastReceiver {
         boolean session = Alarms.KIND_SESSION.equals(kind);
         if (session) Alarms.scheduleNext(context, "after wake");
 
-        Store store = Store.get(context);
+        Store store = Store.real(context); // her progress decides, even if a sandbox is on screen
         if (store.inMaintenance(now)) {
             AppLog.log(context, "maintenance mode: not waking the screen");
             return;

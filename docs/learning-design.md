@@ -5,8 +5,10 @@ says. Written for a (fairly bright) 10-year-old learning or polishing the tables
 
 ## What a day looks like
 
-- **Four short sessions** at set times (default 07:45, 12:30, 16:00, 18:00; ours starts at 08:30),
-  never in quiet hours (19:30–07:00).
+- **Four short sessions** at set times. In school weeks: before school at 07:45, then after
+  school, mid-evening and at 20:30 on weekdays, and 10:00, 12:30, 16:00, 18:00 at weekends (quiet
+  hours 21:00–07:00). In holiday weeks: 10:00, 12:30, 16:00, 18:00 every day (quiet hours
+  19:30–07:00). The parent switches between the two in parent mode.
 - **5 cards per session.** A missed card comes back two cards later, up to three times, so a
   session is 5 to about 9 answers. `7 × 8` and `8 × 7` are separate cards but never in the same
   session, so the second can't be answered from short-term memory.

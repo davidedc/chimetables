@@ -51,6 +51,18 @@ final class Ui {
         return fancy;
     }
 
+    /**
+     * The app ignores Android's text size setting: the screens are laid out for one size, and the
+     * player came set to "Largest" (1.3x), which wrapped labels and pushed buttons off the bottom.
+     * Activities wrap their base context with this in attachBaseContext().
+     */
+    static Context fixedTextSize(Context base) {
+        android.content.res.Configuration config = new android.content.res.Configuration(base.getResources().getConfiguration());
+        if (config.fontScale == 1f) return base;
+        config.fontScale = 1f;
+        return base.createConfigurationContext(config);
+    }
+
     static int dp(Context c, float dp) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, c.getResources().getDisplayMetrics()));
     }

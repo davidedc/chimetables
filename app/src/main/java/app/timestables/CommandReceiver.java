@@ -27,10 +27,12 @@ import java.util.List;
  *   HARDEN | ALLOW_INSTALLS | UNHARDEN [--ez remove_owner true]
  *   SET_PIN --es pin 1234
  *   TEST_WAKE --ei seconds 60 [--es method alarmclock|exact]
- *   SETTINGS [--es json '{"tables":[2,3],"wakeTimes":["07:45"]}']   show, or merge and apply
+ *   SETTINGS [--es json '{"week":"holiday","school":{"mon":["07:45","17:00"]}}']   show, or merge and apply
  *   SET_TIME --el millis <epoch ms>        (auto time is switched off)
  *   RESTRICT --es add|clear no_safe_boot
  *   CAPTURE --ez allow true|false          screenshots (blocked unless allowed)
+ *   SANDBOX --ez on true|false [--es progress file.json] [--ez force true]
+ *                                          a throwaway copy on screen (see Store); ends at screen off
  *   SCHEDULE | BEEP | RESET_PROGRESS
  * </pre>
  */
@@ -111,6 +113,21 @@ public class CommandReceiver extends BroadcastReceiver {
             case "CAPTURE":
                 if (!intent.hasExtra("allow")) return "ERROR --ez allow true|false required";
                 return Kiosk.allowScreenCapture(context, intent.getBooleanExtra("allow", false));
+            case "SANDBOX": {
+                if (!intent.hasExtra("on")) return "ERROR --ez on true|false required";
+                boolean on = intent.getBooleanExtra("on", false);
+                String mode = ParentActivity.open ? "PARENT" : KioskActivity.currentMode;
+                if (on && !"SLEEPING".equals(mode) && !intent.getBooleanExtra("force", false)) {
+                    return "ERROR the player is in use right now (" + mode + "); add --ez force true";
+                }
+                // The kiosk switches stores itself, on its own thread, after dropping what it shows.
+                context.startActivity(new Intent(context, KioskActivity.class)
+                        .setAction(KioskActivity.ACTION_SANDBOX)
+                        .putExtra("on", on)
+                        .putExtra("progress", intent.getStringExtra("progress"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+                return on ? "sandbox requested: check STATUS for sandbox=on" : "sandbox ending";
+            }
             case "SCHEDULE":
                 return "next wake " + Alarms.format(Alarms.scheduleNext(context, "adb"));
             case "BEEP":
@@ -135,14 +152,17 @@ public class CommandReceiver extends BroadcastReceiver {
         BatteryManager bm = context.getSystemService(BatteryManager.class);
         ActivityManager.RunningAppProcessInfo me = new ActivityManager.RunningAppProcessInfo();
         ActivityManager.getMyMemoryState(me);
+        java.time.DayOfWeek today = java.time.LocalDate.now().getDayOfWeek();
         return "mode=" + (ParentActivity.open ? "PARENT" : KioskActivity.currentMode)
+                + " sandbox=" + (Store.inSandbox() ? "on" : "off")
                 + " deviceOwner=" + Kiosk.isDeviceOwner(context)
                 + " lockTask=" + Kiosk.lockTaskStateName(context)
                 + " maintenance=" + store.inMaintenance(now)
                 + " pinSet=" + (store.pinHash() != null)
                 + " nextWake=" + Alarms.format(store.nextWake()).replace(' ', '_')
                 + " cards=" + active.size() + " due=" + stats.due + " unseen=" + stats.unseen
-                + " sessionSize=" + s.sessionSize + " times=" + s.wakeTimes
+                + " sessionSize=" + s.sessionSize + " week=" + s.week
+                + " today=" + s.plan().on(today).toString().replace(" ", "")
                 + " stickers=" + store.deck().stickers.size() + " newStickersLeft=" + store.deck().stickersLeft(Stickers.more(context))
                 + " riddles=" + (store.deck().unlockedDay > 0 ? store.deck().riddles.size() + "/" + RiddleBank.get(context).size() : "locked")
                 + " alarmVol=" + am.getStreamVolume(AudioManager.STREAM_ALARM) + "/" + am.getStreamMaxVolume(AudioManager.STREAM_ALARM)

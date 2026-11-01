@@ -26,6 +26,7 @@ public final class AppLog {
      * history, kept so a scheduler such as FSRS could later be fitted to this child's own data.
      */
     public static synchronized void review(Context context, String jsonLine) {
+        if (Store.inSandbox()) return; // not her answers
         File dir = context.getExternalFilesDir(null);
         if (dir == null) return;
         try (FileWriter w = new FileWriter(new File(dir, "reviews.jsonl"), true)) {
@@ -36,6 +37,7 @@ public final class AppLog {
     }
 
     public static synchronized void log(Context context, String message) {
+        if (Store.inSandbox()) message = "[sandbox] " + message;
         Log.i(TAG, message);
         File dir = context.getExternalFilesDir(null);
         if (dir == null) return;

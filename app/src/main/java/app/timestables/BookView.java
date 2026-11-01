@@ -97,6 +97,9 @@ final class BookView extends FrameLayout {
             if (i == RIDDLES && !riddlesOpen) continue;
             final int index = i;
             TextView t = Ui.text(c, 13, Ui.INK, true);
+            // Always one line, all four alike: a long label shrinks a little instead of wrapping.
+            t.setMaxLines(1);
+            t.setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
             t.setText(TABS[i]);
             t.setOnClickListener(v -> select(index));
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -1, 1f);

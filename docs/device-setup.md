@@ -199,10 +199,12 @@ lifts the block for an update and puts it back afterwards.
   a wake-up nobody answers (10 minutes of screen and chimes). The first real day (9 sessions,
   9 bonus rounds and a night, 18¾ hours unplugged) used 18%, so a charge lasts about 4 days.
   Charging over USB is fine at any time.
+- **School weeks and holidays:** parent mode → Wake-up times → the other tab → **Use from now**
+  (or `scripts/settings.sh '{"week":"holiday"}'`). Each plan keeps its own times.
 - **Settings** (wake-up times, tables, new cards a day and so on): parent mode, or
   `scripts/settings.sh` from the Mac. See [Changing cards and schedule](../README.md#changing-cards-and-schedule).
 - **Updates:** `scripts/build.sh release && scripts/install.sh release`. Progress is kept.
-- **Clock:** with no network the clock drifts slowly (about 1 s a day). Every `install.sh`
+- **Clock:** with no network the clock drifts slowly (18 s in the first week). Every `install.sh`
   resyncs it, or run `scripts/sync-time.sh`. Summer and winter time switch by themselves: the time
   zone rules are on the device.
 - **Progress and answer history:** `scripts/logs.sh` saves `reviews.jsonl`, one line per answer.

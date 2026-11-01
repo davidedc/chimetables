@@ -4,8 +4,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TreeSet;
 
 /** JSON (de)serialisation of {@link Deck} and {@link Settings}. Unknown or missing fields fall back to defaults. */
@@ -134,15 +136,13 @@ public final class Json {
 
     public static String settingsToJson(Settings s) {
         try {
-            JSONArray times = new JSONArray();
-            for (LocalTime t : s.wakeTimes) times.put(t.toString());
             return new JSONObject()
                     .put("version", VERSION)
                     .put("tables", new JSONArray(s.tables))
                     .put("maxFactor", s.maxFactor)
-                    .put("wakeTimes", times)
-                    .put("quietStart", s.quietStart.toString())
-                    .put("quietEnd", s.quietEnd.toString())
+                    .put("week", s.week)
+                    .put(Settings.SCHOOL, planToJson(s.school))
+                    .put(Settings.HOLIDAY, planToJson(s.holiday))
                     .put("sessionSize", s.sessionSize)
                     .put("newPerDay", s.newPerDay)
                     .put("volumePercent", s.volumePercent)
@@ -170,13 +170,26 @@ public final class Json {
             for (int i = 0; i < tables.length(); i++) s.tables.add(tables.getInt(i));
         }
         s.maxFactor = o.optInt("maxFactor", s.maxFactor);
-        JSONArray times = o.optJSONArray("wakeTimes");
-        if (times != null) {
-            s.wakeTimes = new ArrayList<>();
-            for (int i = 0; i < times.length(); i++) s.wakeTimes.add(LocalTime.parse(times.getString(i)));
+        if (o.has("week")) {
+            String week = o.getString("week");
+            if (!Settings.SCHOOL.equals(week) && !Settings.HOLIDAY.equals(week)) {
+                throw new JSONException("week must be \"" + Settings.SCHOOL + "\" or \"" + Settings.HOLIDAY + "\"");
+            }
+            s.week = week;
         }
-        if (o.has("quietStart")) s.quietStart = LocalTime.parse(o.getString("quietStart"));
-        if (o.has("quietEnd")) s.quietEnd = LocalTime.parse(o.getString("quietEnd"));
+        if (o.has(Settings.SCHOOL)) planFromJson(o.getJSONObject(Settings.SCHOOL), s.school);
+        if (o.has(Settings.HOLIDAY)) planFromJson(o.getJSONObject(Settings.HOLIDAY), s.holiday);
+        if (o.has("wakeTimes") && !o.has(Settings.SCHOOL) && !o.has(Settings.HOLIDAY)) {
+            // Saved before week plans: one list for every day. Those were holiday times, so they
+            // become the holiday plan, still in use; school weeks start from the defaults.
+            JSONArray times = o.getJSONArray("wakeTimes");
+            List<LocalTime> list = new ArrayList<>();
+            for (int i = 0; i < times.length(); i++) list.add(LocalTime.parse(times.getString(i)));
+            s.holiday = WeekPlan.everyDay(list,
+                    o.has("quietStart") ? LocalTime.parse(o.getString("quietStart")) : s.holiday.quietStart,
+                    o.has("quietEnd") ? LocalTime.parse(o.getString("quietEnd")) : s.holiday.quietEnd);
+            s.week = Settings.HOLIDAY;
+        }
         s.sessionSize = o.optInt("sessionSize", s.sessionSize);
         s.newPerDay = o.optInt("newPerDay", s.newPerDay);
         s.volumePercent = o.optInt("volumePercent", s.volumePercent);
@@ -186,5 +199,30 @@ public final class Json {
         s.screenTimeoutSeconds = o.optInt("screenTimeoutSeconds", s.screenTimeoutSeconds);
         s.newStickerEveryDays = o.optInt("newStickerEveryDays", s.newStickerEveryDays);
         return s;
+    }
+
+    private static JSONObject planToJson(WeekPlan p) throws JSONException {
+        JSONObject o = new JSONObject()
+                .put("quietStart", p.quietStart.toString())
+                .put("quietEnd", p.quietEnd.toString());
+        for (DayOfWeek d : DayOfWeek.values()) {
+            JSONArray times = new JSONArray();
+            for (LocalTime t : p.on(d)) times.put(t.toString());
+            o.put(WeekPlan.key(d), times);
+        }
+        return o;
+    }
+
+    /** Applies the days and quiet hours present in {@code o} to {@code p}; days left out keep their times. */
+    private static void planFromJson(JSONObject o, WeekPlan p) throws JSONException {
+        if (o.has("quietStart")) p.quietStart = LocalTime.parse(o.getString("quietStart"));
+        if (o.has("quietEnd")) p.quietEnd = LocalTime.parse(o.getString("quietEnd"));
+        for (DayOfWeek d : DayOfWeek.values()) {
+            JSONArray times = o.optJSONArray(WeekPlan.key(d));
+            if (times == null) continue;
+            List<LocalTime> list = new ArrayList<>();
+            for (int i = 0; i < times.length(); i++) list.add(LocalTime.parse(times.getString(i)));
+            p.set(d, list);
+        }
     }
 }
