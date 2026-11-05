@@ -27,7 +27,8 @@ Plain Android Views, Java, no AndroidX, no Play Services, no network, no ads.
   do nothing, so a session can't start (or be answered) by accident.
 - **Cards:** `7 × 8 = ?` in huge text; she **types the answer** on a big keypad (as in the UK
   Year 4 Multiplication Tables Check). The right number is accepted the moment it's typed; a wrong
-  one shows a gentle "Not 54, let's remember 56!" and the card comes back two cards later.
+  one shows a gentle "Not 54, let's remember 56!" and the card comes back two cards later. A wrong
+  9× answer shows the 9s trick instead: "9 × 6 = 60 − 6 = 54".
   Happy sounds only. There are no self-rating buttons: the app grades her (see the scheduler below).
 - **End:** "Well done!", or confetti, a fanfare and a **sticker** when at least 80% were right first
   time or a badge was earned (at most one *new* sticker a day; later ones re-show her collection).
@@ -207,8 +208,18 @@ Implemented from the Anki manual's description of its SM-2 variant (not Anki's A
   remembered at that cap.
 - Intervals capped at **60 days** so facts stay fresh, ±5% fuzz from 7 days so cards spread out,
   and **7×8 and 8×7 never in the same session** (Anki's "bury siblings").
-- Up to 5 new cards a day by default (15 on ours, so all 121 are met in about 9 days and known
-  facts quickly move out to 3+ days); due cards come first, so new cards slow down by themselves when reviews pile up.
+- **What goes in a session**, in this order: cards she is still learning (missed ones, and new ones
+  waiting for their second go, counted as due up to 30 minutes early so they don't miss a call by a
+  few minutes), then due reviews, oldest first, then new cards. At most **2 new cards a session**,
+  and **none while 2 cards are still being learned**, so hard facts settle before more arrive (all at
+  once, 9×6, 9×7 and 9×8 got 1 in 5 right for three calls running). Up to 5 new cards a day by
+  default (15 on ours); due cards come first, so new cards slow down by themselves when reviews pile up.
+- **Practice cards fill the rest:** places nothing needs go to cards she has already met, least
+  established first, skipping ones answered today. Like a bonus round they are practice only (the
+  schedule is untouched) and `reviews.jsonl` marks them `"practice":true`. A session with nothing
+  due and no new card allowed is not a practice session: the call stays silent, and playing by
+  hand gives a bonus round. The log says what each session was made of, e.g.
+  `session start: 8 cards (2 learning, 3 due, 2 new, 1 practice)`.
 - Every answer is appended to `reviews.jsonl` (time, card, what she typed, grade, response time, interval),
   enough to fit an FSRS model to her own data later if wanted.
 

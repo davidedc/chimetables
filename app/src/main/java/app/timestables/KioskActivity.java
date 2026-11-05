@@ -13,6 +13,8 @@ import android.os.SystemClock;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -35,6 +37,7 @@ import app.timestables.core.Riddle;
 import app.timestables.core.Session;
 import app.timestables.core.Settings;
 import app.timestables.core.Srs;
+import app.timestables.core.Tricks;
 
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -70,6 +73,8 @@ public class KioskActivity extends Activity {
     private static final long CELEBRATION_MS = 10_000;
     private static final long RIGHT_PAUSE_MS = 700;
     private static final long WRONG_PAUSE_MS = 2800;
+    /** Longer when the wrong-answer screen shows a trick to read. */
+    private static final long TRICK_PAUSE_MS = 4500;
     /** Share of cards right first time that earns confetti. */
     private static final int CELEBRATE_PERCENT = 80;
     private static final int MORNING_BEFORE_HOUR = 9;
@@ -375,9 +380,10 @@ public class KioskActivity extends Activity {
         session = bonus
                 ? Session.bonus(store.deck(), store.srs(), store.activeCards(), s.sessionSize, random)
                 : Session.plan(store.deck(), store.srs(), store.activeCards(), s.sessionSize, s.newPerDay,
-                        System.currentTimeMillis());
+                        System.currentTimeMillis(), random);
         holdScreen(SESSION_IDLE_MS);
-        AppLog.log(this, (bonus ? "bonus round start: " : "session start: ") + session.planned() + " cards");
+        AppLog.log(this, (bonus ? "bonus round start: " : "session start: ") + session.planned() + " cards"
+                + (bonus || session.isEmpty() ? "" : " (" + session.makeup() + ")"));
         if (session.isEmpty()) {
             finishSession();
             return;
@@ -413,19 +419,20 @@ public class KioskActivity extends Activity {
 
     private void answer(boolean right) {
         Card card = session.current();
+        boolean practice = session.isPractice(card);
         long now = System.currentTimeMillis();
         long totalMs = SystemClock.uptimeMillis() - questionShownAt;
         Rating rating = session.answer(Answer.rate(right, firstKeyMs), now, firstKeyMs);
         Store.get(this).saveDeck();
-        AppLog.log(this, (session.isBonus() ? "bonus answer " : "answer ") + card.id() + " typed " + typed
-                + (right ? " right" : " wrong") + " first key " + firstKeyMs + "ms total " + totalMs + "ms -> " + rating
+        AppLog.log(this, (session.isBonus() ? "bonus answer " : practice ? "practice answer " : "answer ") + card.id()
+                + " typed " + typed + (right ? " right" : " wrong") + " first key " + firstKeyMs + "ms total " + totalMs + "ms -> " + rating
                 + " " + card);
         AppLog.review(this, "{\"t\":" + now + ",\"card\":\"" + card.id() + "\",\"typed\":\"" + typed
                 + "\",\"right\":" + right + ",\"rating\":\"" + rating + "\",\"grade\":\"" + Srs.grade(rating, firstKeyMs)
                 + "\",\"firstKeyMs\":" + firstKeyMs + ",\"totalMs\":" + totalMs + ",\"state\":\"" + card.state
                 + "\",\"ivl\":" + card.intervalDays + ",\"ease\":" + Math.round(card.ease * 100) / 100.0
                 + ",\"lapses\":" + card.lapses + ",\"due\":" + card.dueAt
-                + (session.isBonus() ? ",\"bonus\":true" : "") + "}");
+                + (session.isBonus() ? ",\"bonus\":true" : practice ? ",\"practice\":true" : "") + "}");
         if (!right) Chime.again();
         else if (rating == Rating.EASY) Chime.easy();
         else Chime.good();
@@ -434,7 +441,8 @@ public class KioskActivity extends Activity {
         feedbackRight = right;
         feedbackTyped = typed.toString();
         setMode(Mode.FEEDBACK);
-        handler.postDelayed(nextTask, right ? RIGHT_PAUSE_MS : WRONG_PAUSE_MS);
+        handler.postDelayed(nextTask, right ? RIGHT_PAUSE_MS
+                : Tricks.nines(card.a, card.b) != null ? TRICK_PAUSE_MS : WRONG_PAUSE_MS);
     }
 
     private void next() {
@@ -1079,7 +1087,16 @@ public class KioskActivity extends Activity {
                 reserveFeedbackLines();
                 if (!feedbackRight) {
                     footer.setTextColor(Ui.INK);
-                    footer.setText("Not " + feedbackTyped + " — let's remember " + feedbackCard.answer() + "!");
+                    String trick = Tricks.nines(feedbackCard.a, feedbackCard.b);
+                    if (trick == null) {
+                        footer.setText("Not " + feedbackTyped + " — let's remember " + feedbackCard.answer() + "!");
+                    } else {
+                        SpannableStringBuilder sb = new SpannableStringBuilder("Not " + feedbackTyped + " — here's a 9s trick:\n");
+                        int start = sb.length();
+                        sb.append(trick);
+                        sb.setSpan(new StyleSpan(Typeface.BOLD), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        footer.setText(sb);
+                    }
                 }
                 keypad.setVisibility(View.VISIBLE);
                 keypad.setAlpha(0.35f);

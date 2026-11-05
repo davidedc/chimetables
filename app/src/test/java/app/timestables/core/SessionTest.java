@@ -8,6 +8,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
@@ -21,6 +22,24 @@ public class SessionTest {
                 settings.sessionSize, settings.newPerDay, now);
     }
 
+    /** Marks these cards as met (in review, 3-day interval) and due at {@code dueAt}. */
+    void meet(Deck deck, long dueAt, String... ids) {
+        deck.active(settings.tables, settings.maxFactor);
+        for (String id : ids) {
+            Card c = deck.cards.get(id);
+            c.state = Card.State.REVIEW;
+            c.intervalDays = 3;
+            c.dueAt = dueAt;
+        }
+    }
+
+    /** A deck with five met cards, all due, so a session is five reviews. */
+    Deck fiveDue(long now) {
+        Deck deck = new Deck();
+        meet(deck, now - 3600_000L, "2x5", "2x6", "2x7", "2x8", "2x9");
+        return deck;
+    }
+
     static List<String> playAll(Session s, Rating rating, long now) {
         List<String> shown = new ArrayList<>();
         while (!s.isDone()) {
@@ -31,36 +50,35 @@ public class SessionTest {
     }
 
     @Test
-    public void firstSessionIntroducesFiveNewCards() {
+    public void firstSessionIntroducesTwoNewCards() {
         Deck deck = new Deck();
         Session s = plan(deck, at("2026-10-20T07:45"));
-        assertEquals(5, s.planned());
+        assertEquals(2, s.planned()); // nothing met yet, so no practice cards either
         assertEquals("2x2", s.current().id());
         playAll(s, Rating.GOOD, at("2026-10-20T07:46"));
-        assertEquals(5, s.finished());
-        assertEquals(5, deck.newCount);
+        assertEquals(2, s.finished());
+        assertEquals(2, deck.newCount);
     }
 
     @Test
     public void dailyNewCapStopsFurtherNewCardsAndLaterTodayCardsComeBack() {
+        settings.newPerDay = 2;
         Deck deck = new Deck();
         List<String> morning = playAll(plan(deck, at("2026-10-20T07:45")), Rating.GOOD, at("2026-10-20T07:46"));
 
-        // 12:30: the five learning cards are due again; no new cards allowed today.
+        // 12:30: the two learning cards are due again; no new cards allowed today.
         Session noon = plan(deck, at("2026-10-20T12:30"));
-        assertEquals(5, noon.planned());
-        for (String id : morning) assertEquals(Card.State.LEARNING, deck.cards.get(id).state);
-        playAll(noon, Rating.GOOD, at("2026-10-20T12:31"));
+        assertEquals(morning, playAll(noon, Rating.GOOD, at("2026-10-20T12:31")));
+        for (String id : morning) assertEquals(Card.State.REVIEW, deck.cards.get(id).state);
 
         // 16:00: everything graduated to tomorrow and the cap is used up.
         long four = at("2026-10-20T16:00");
         assertTrue(plan(deck, four).isEmpty());
         assertTrue(Session.nothingToDo(deck, srs, deck.active(settings.tables, 10), settings.newPerDay, four));
 
-        // Next morning: 5 reviews fill the session; new cards wait.
+        // Next morning: the reviews come first, then today's new cards.
         Session tomorrow = plan(deck, at("2026-10-21T07:45"));
-        assertEquals(5, tomorrow.planned());
-        assertEquals(Card.State.REVIEW, tomorrow.current().state);
+        assertEquals(Arrays.asList("2x2", "2x3", "2x4", "2x5"), playAll(tomorrow, Rating.GOOD, at("2026-10-21T07:46")));
     }
 
     @Test
@@ -78,18 +96,17 @@ public class SessionTest {
         future.state = Card.State.REVIEW;
         future.dueAt = now + 86_400_000L;
 
-        List<String> shown = playAll(plan(deck, now), Rating.GOOD, now);
-        assertEquals(5, shown.size());
-        assertEquals(older.id(), shown.get(0));
-        assertEquals(newer.id(), shown.get(1));
-        assertEquals("2x2", shown.get(2));
-        assertFalse(shown.contains(future.id()));
+        Session s = plan(deck, now);
+        List<String> shown = playAll(s, Rating.GOOD, now);
+        assertEquals(Arrays.asList(older.id(), newer.id(), "2x2", "2x3", future.id()), shown);
+        assertTrue(s.isPractice(future)); // not due: it only fills the last place
+        assertEquals(now + 86_400_000L, future.dueAt);
     }
 
     @Test
     public void againComesBackTwoCardsLaterAtMostThreeTimes() {
-        Deck deck = new Deck();
         long now = at("2026-10-20T07:45");
+        Deck deck = fiveDue(now);
         Session s = plan(deck, now);
         Card first = s.current();
         s.answer(Rating.AGAIN, now);
@@ -111,8 +128,8 @@ public class SessionTest {
 
     @Test
     public void againOnLastCardStillRepeats() {
-        Deck deck = new Deck();
         long now = at("2026-10-20T07:45");
+        Deck deck = fiveDue(now);
         Session s = plan(deck, now);
         for (int i = 0; i < 4; i++) s.answer(Rating.GOOD, now);
         Card last = s.current();
@@ -126,15 +143,17 @@ public class SessionTest {
     @Test
     public void sessionSizeSettingIsRespected() {
         settings.sessionSize = 3;
-        Deck deck = new Deck();
-        assertEquals(3, plan(deck, at("2026-10-20T07:45")).planned());
+        long now = at("2026-10-20T07:45");
+        assertEquals(3, plan(fiveDue(now), now).planned());
     }
 
     @Test
-    public void firstSessionSkipsSiblingsOfCardsAlreadyPicked() {
+    public void newCardsSkipSiblingsOfCardsAlreadyPicked() {
+        long now = at("2026-10-20T07:45");
         Deck deck = new Deck();
-        List<String> shown = playAll(plan(deck, at("2026-10-20T07:45")), Rating.GOOD, at("2026-10-20T07:46"));
-        assertEquals(java.util.Arrays.asList("2x2", "2x3", "2x4", "2x5", "2x6"), shown);
+        meet(deck, now - 3600_000L, "2x3");
+        // 2x3 is due; the next new cards are 2x2, then 3x2 (its sibling, so skipped), then 2x4.
+        assertEquals(Arrays.asList("2x3", "2x2", "2x4"), playAll(plan(deck, now), Rating.GOOD, now));
     }
 
     @Test
@@ -160,15 +179,13 @@ public class SessionTest {
 
     @Test
     public void perfectNeedsEveryCardRightFirstTime() {
-        Deck deck = new Deck();
         long now = at("2026-10-20T07:45");
-        Session good = plan(deck, now);
+        Session good = plan(fiveDue(now), now);
         playAll(good, Rating.GOOD, now);
         assertTrue(good.perfect());
         assertEquals(5, good.firstTryCorrect());
 
-        Deck deck2 = new Deck();
-        Session mixed = plan(deck2, now);
+        Session mixed = plan(fiveDue(now), now);
         mixed.answer(Rating.AGAIN, now);
         playAll(mixed, Rating.GOOD, now);
         assertFalse(mixed.perfect());
@@ -179,10 +196,12 @@ public class SessionTest {
 
     @Test
     public void aCardMissedThisSessionCannotComeBackAsEasy() {
-        Deck deck = new Deck();
         long now = at("2026-10-20T07:45");
+        Deck deck = new Deck();
+        meet(deck, now + 86_400_000L, "2x5", "2x6", "2x7"); // practice cards after the two new ones
         Session s = plan(deck, now);
         Card first = s.current();
+        assertEquals(Card.State.NEW, first.state);
         s.answer(Rating.AGAIN, now);
         s.answer(Rating.GOOD, now);
         s.answer(Rating.GOOD, now);
@@ -194,8 +213,8 @@ public class SessionTest {
 
     @Test
     public void quickRightAnswersBuildARun() {
-        Deck deck = new Deck();
         long now = at("2026-10-20T07:45");
+        Deck deck = fiveDue(now);
         Session s = plan(deck, now);
         s.answer(Rating.GOOD, now, 1_500);
         s.answer(Rating.EASY, now, 2_000);
@@ -218,9 +237,12 @@ public class SessionTest {
 
     @Test
     public void bonusRoundLeavesScheduleCountersAndRunsAlone() {
-        Deck deck = new Deck();
-        List<String> morning = playAll(plan(deck, at("2026-10-20T07:45")), Rating.GOOD, at("2026-10-20T07:46"));
         long eight = at("2026-10-20T08:00");
+        Deck deck = new Deck();
+        List<String> morning = Arrays.asList("2x5", "2x6", "2x7", "2x8", "2x9");
+        meet(deck, eight + 86_400_000L, morning.toArray(new String[0]));
+        deck.newDay = srs.dayNumber(eight);
+        deck.newCount = settings.newPerDay; // today's new cards are used up
         List<Card> active = deck.active(settings.tables, settings.maxFactor);
         assertTrue(Session.nothingToDo(deck, srs, active, settings.newPerDay, eight));
         assertTrue(Session.bonusAvailable(active));
@@ -297,9 +319,8 @@ public class SessionTest {
 
     @Test
     public void partOfASessionIsRecordedOnceAndTheRestAddedLater() {
-        Deck deck = new Deck();
         long now = at("2026-10-20T07:45");
-        Session s = plan(deck, now);
+        Session s = plan(fiveDue(now), now);
         s.answer(Rating.GOOD, now);
         s.answer(Rating.AGAIN, now);
         assertFalse(s.recorded());
@@ -311,5 +332,103 @@ public class SessionTest {
         assertTrue(s.recorded());
         assertEquals(4, s.unrecordedAnswers()); // 3 more cards + the missed one again
         assertEquals(3, s.unrecordedCorrect());
+    }
+
+    /** Two cards missed this morning, and three reviews that fell due at midnight. */
+    Deck missedThisMorning() {
+        Deck deck = new Deck();
+        meet(deck, at("2026-11-04T00:00"), "3x7", "3x8", "4x4");
+        for (String id : new String[] {"9x6", "9x8"}) {
+            Card c = deck.cards.get(id);
+            c.state = Card.State.LEARNING;
+            c.step = 0;
+            c.dueAt = at("2026-11-04T07:46");
+        }
+        return deck;
+    }
+
+    @Test
+    public void cardsStillBeingLearnedComeBeforeReviews() {
+        // Her Wednesday: 9x6 and 9x8 missed at 07:46 waited behind the midnight reviews all day.
+        Deck deck = missedThisMorning();
+        assertEquals(Arrays.asList("9x6", "9x8", "3x7", "3x8", "4x4"),
+                playAll(plan(deck, at("2026-11-04T17:00")), Rating.GOOD, at("2026-11-04T17:01")));
+    }
+
+    @Test
+    public void aLearningCardDueWithinHalfAnHourCountsAsDue() {
+        settings.newPerDay = 0;
+        Deck deck = new Deck();
+        deck.active(settings.tables, settings.maxFactor);
+        Card c = deck.cards.get("4x12");
+        c.state = Card.State.LEARNING;
+        c.step = 1;
+        c.dueAt = at("2026-11-02T19:05"); // right at 17:05, back "later today"
+        List<Card> active = deck.active(settings.tables, settings.maxFactor);
+        assertTrue(Session.nothingToDo(deck, srs, active, 0, at("2026-11-02T18:30")));
+        assertFalse(Session.nothingToDo(deck, srs, active, 0, at("2026-11-02T18:45")));
+        assertEquals(c, plan(deck, at("2026-11-02T18:45")).current());
+    }
+
+    @Test
+    public void noNewCardsWhileTwoAreStillBeingLearned() {
+        long now = at("2026-11-04T17:00");
+        Deck deck = missedThisMorning();
+        for (String id : new String[] {"3x7", "3x8", "4x4"}) deck.cards.get(id).dueAt = now + 86_400_000L;
+        assertEquals("2 learning, 0 due, 0 new, 3 practice", plan(deck, now).makeup());
+        // 9x6 has settled: with one card still being learned, new cards may come again.
+        deck.cards.get("9x6").state = Card.State.REVIEW;
+        deck.cards.get("9x6").dueAt = now + 86_400_000L;
+        assertEquals("1 learning, 0 due, 2 new, 2 practice", plan(deck, now).makeup());
+    }
+
+    @Test
+    public void atMostTwoNewCardsAndPracticeFillsTheRest() {
+        // Her Tuesday 15:45: nothing due after two rounds of her own, so the call was five new cards.
+        settings.sessionSize = 8;
+        long now = at("2026-11-03T15:45");
+        Deck deck = new Deck();
+        meet(deck, now + 86_400_000L, "2x5", "2x6", "2x7", "2x8", "2x9", "2x10", "2x11", "2x12");
+        Session s = plan(deck, now);
+        assertEquals(8, s.planned());
+        assertEquals("0 learning, 0 due, 2 new, 6 practice", s.makeup());
+        List<Card> cards = new ArrayList<>();
+        while (!s.isDone()) {
+            cards.add(s.current());
+            s.answer(Rating.EASY, now, 1_000);
+        }
+        assertEquals("2x2", cards.get(0).id());
+        assertEquals("2x3", cards.get(1).id());
+        assertEquals(2, deck.newCount);
+        for (Card c : cards.subList(2, 8)) {
+            assertTrue(s.isPractice(c));
+            assertEquals(now + 86_400_000L, c.dueAt); // practice only: the schedule is untouched
+            assertEquals(0, c.seen);
+        }
+        assertTrue(s.perfect());
+    }
+
+    @Test
+    public void practiceSkipsCardsAnsweredToday() {
+        long now = at("2026-11-05T17:15");
+        Deck deck = new Deck();
+        meet(deck, now - 3600_000L, "2x5");
+        meet(deck, now + 86_400_000L, "2x6", "2x7", "2x8");
+        deck.cards.get("2x6").lastSeenAt = at("2026-11-05T07:45");
+        deck.newDay = srs.dayNumber(now);
+        deck.newCount = settings.newPerDay;
+        settings.sessionSize = 3;
+        assertEquals(Arrays.asList("2x5", "2x7", "2x8"), playAll(plan(deck, now), Rating.GOOD, now));
+    }
+
+    @Test
+    public void nothingToDoIsAnEmptySessionNotAPracticeOne() {
+        long now = at("2026-11-05T17:15");
+        Deck deck = new Deck();
+        meet(deck, now + 86_400_000L, "2x5", "2x6", "2x7");
+        deck.newDay = srs.dayNumber(now);
+        deck.newCount = settings.newPerDay;
+        assertTrue(plan(deck, now).isEmpty());
+        assertTrue(Session.nothingToDo(deck, srs, deck.active(settings.tables, settings.maxFactor), settings.newPerDay, now));
     }
 }

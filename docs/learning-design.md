@@ -9,14 +9,20 @@ says. Written for a (fairly bright) 10-year-old learning or polishing the tables
   school, mid-evening and at 20:30 on weekdays, and 10:00, 12:30, 16:00, 18:00 at weekends (quiet
   hours 21:00–07:00). In holiday weeks: 10:00, 12:30, 16:00, 18:00 every day (quiet hours
   19:30–07:00). The parent switches between the two in parent mode.
-- **5 cards per session.** A missed card comes back two cards later, up to three times, so a
-  session is 5 to about 9 answers. `7 × 8` and `8 × 7` are separate cards but never in the same
+- **5 cards per session** by default; we use 8, since she asked for more. A missed card comes back
+  two cards later, up to three times. `7 × 8` and `8 × 7` are separate cards but never in the same
   session, so the second can't be answered from short-term memory.
-- **About 30–60 seconds per session**, so a few minutes a day at most. Each answer takes a few
-  seconds; a right answer pauses 0.7 s, a wrong one 2.8 s to read the correct answer; the end
-  screen stays 6–10 s.
-- **New cards per day:** 5 by default. We use 15 for a child who already knows the easy tables:
-  all 121 cards are met in about 9 days, and known facts move out of the way after one quick answer.
+- **What's in a session:** first the cards she is still learning (ones she missed, and new ones
+  due their second go), then due reviews, then **at most 2 new cards**, and none at all while 2
+  cards are still being learned. Any places left are **practice cards**: facts she has already
+  met, least established first, which don't change the schedule. So a session always has its
+  full size when there is anything to do, but never more than 2 facts she has never seen.
+- **About 30–90 seconds per session**, so a few minutes a day at most. Each answer takes a few
+  seconds; a right answer pauses 0.7 s, a wrong one 2.8 s to read the correct answer (4.5 s for
+  a 9× fact, which shows the trick: "9 × 6 = 60 − 6 = 54"); the end screen stays 6–10 s.
+- **New cards per day:** 5 by default. We use 15 for a child who already knows the easy tables, so
+  the easy ones go by quickly; the hard facts come at the 2-per-session pace, and only once the
+  last ones have settled.
 - **Easiest tables first:** 2, 10, 5, 3, 4, 11, 9, 6, 7, 8, 12.
 
 ## How answers are graded
@@ -43,8 +49,8 @@ The details are in [the scheduler](../README.md#the-scheduler-child-tuned-sm-2).
 - Pressing the power button shows **"Slide to play"** whenever something is due. Playing early
   uses the same due cards and the same daily allowance of new cards, so it moves practice earlier
   rather than adding more. A later wake-up then finds less to do, or stays silent.
-- **Missed wake-ups cost nothing.** The cards wait, sessions never grow beyond 5, and due cards
-  always come before new ones, so if she falls behind, new cards slow down by themselves.
+- **Missed wake-ups cost nothing.** The cards wait, sessions never grow beyond their size, and due
+  cards always come before new ones, so if she falls behind, new cards slow down by themselves.
 - When nothing is due, the slider offers a **bonus round**: up to 5 cards she has already met,
   drawn at random from her least established ones. It is pure practice. It doesn't change the
   schedule and earns no streak days, badges or stickers (a great round still gets confetti), so
